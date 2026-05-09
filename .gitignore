@@ -6,3 +6,11 @@ logs
 data
 coverage
 .claude
+.next
+.vercel
+next-env.d.ts
+dist
+.env
+.env.local
+.premium
+tsconfig.tsbuildinfo
