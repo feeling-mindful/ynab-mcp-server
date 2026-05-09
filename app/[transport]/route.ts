@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import * as ynab from "ynab";
@@ -80,6 +81,13 @@ const handler = createMcpHandler(
   },
 );
 
+function timingSafeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
 const verifyToken = async (
   _req: Request,
   bearerToken?: string,
@@ -91,7 +99,7 @@ const verifyToken = async (
     );
   }
   if (!bearerToken) return undefined;
-  if (bearerToken !== expected) return undefined;
+  if (!timingSafeCompare(bearerToken, expected)) return undefined;
 
   return {
     token: bearerToken,

@@ -18,7 +18,7 @@
     "url": "git+https://github.com/calebl/ynab-mcp-server.git"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.cli.json && chmod +x dist/index.js",
+    "build": "tsc -p tsconfig.cli.json && node -e \"const fs=require('node:fs');if(fs.existsSync('dist/index.js'))fs.chmodSync('dist/index.js',0o755)\"",
     "prepare": "npm run build",
     "watch": "tsc -p tsconfig.cli.json --watch",
     "start": "node dist/index.js",
