@@ -18,16 +18,16 @@
     "url": "git+https://github.com/calebl/ynab-mcp-server.git"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.cli.json && node -e \"const fs=require('node:fs');if(fs.existsSync('dist/index.js'))fs.chmodSync('dist/index.js',0o755)\"",
-    "prepare": "npm run build",
+    "build": "next build",
+    "build:cli": "tsc -p tsconfig.cli.json && node -e \"const fs=require('node:fs');if(fs.existsSync('dist/index.js'))fs.chmodSync('dist/index.js',0o755)\"",
+    "prepare": "npm run build:cli",
     "watch": "tsc -p tsconfig.cli.json --watch",
     "start": "node dist/index.js",
-    "debug": "npm run build && npx @modelcontextprotocol/inspector dist/index.js",
+    "debug": "npm run build:cli && npx @modelcontextprotocol/inspector dist/index.js",
     "test": "vitest",
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
     "dev": "next dev",
-    "next:build": "next build",
     "next:start": "next start"
   },
   "dependencies": {
