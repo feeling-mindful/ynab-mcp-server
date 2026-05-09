@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "preserveSymlinks": true,
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "app",
+    "dist",
+    ".next",
+    "src/tests",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}

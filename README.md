@@ -55,6 +55,39 @@ Next:
 * move off of mcp framework to use the model context protocol sdk directly?
 
 
+## URL-based deployment (Vercel)
+
+This fork additionally exposes the server over HTTP for clients that connect to a remote MCP URL (e.g. Perplexity custom remote connectors).
+
+### Deploy
+
+1. Connect this repo to a Vercel project (`vercel link` or via the Vercel dashboard).
+2. Set the following environment variables in Vercel:
+   - `YNAB_API_TOKEN` — your YNAB Personal Access Token (single-tenant: only your budgets are accessible).
+   - `YNAB_BUDGET_ID` — (optional) default budget ID used when tools don't receive one.
+   - `MCP_API_KEY` — a long random string. Clients must send this as `Authorization: Bearer <MCP_API_KEY>` to access the server.
+3. Deploy. Endpoints:
+   - `https://<your-app>.vercel.app/mcp` — Streamable HTTP transport
+   - `https://<your-app>.vercel.app/sse` — Server-Sent Events transport
+
+### Connect from Perplexity
+
+Account settings → Connectors → **+ Custom connector** → **Remote**:
+- **MCP Server URL**: `https://<your-app>.vercel.app/mcp` (or `/sse`)
+- **Authentication**: API Key
+- **API Key**: the value of your `MCP_API_KEY` env var
+- **Transport**: Streamable HTTP (or SSE if you used `/sse`)
+
+### Local dev
+
+```bash
+npm install
+echo 'YNAB_API_TOKEN=your_pat' > .env.local
+echo 'MCP_API_KEY=local-dev-key' >> .env.local
+npm run dev
+# server at http://localhost:3000/mcp
+```
+
 ## Quick Start
 
 ```bash
