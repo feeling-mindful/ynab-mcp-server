@@ -35,6 +35,14 @@ import * as DeleteScheduledTransactionTool from "./tools/DeleteScheduledTransact
 import * as ImportTransactionsTool from "./tools/ImportTransactionsTool.js";
 import * as ListMonthsTool from "./tools/ListMonthsTool.js";
 import * as GetUserTool from "./tools/GetUserTool.js";
+import * as CreatePayeeTool from "./tools/CreatePayeeTool.js";
+import * as CreateCategoryTool from "./tools/CreateCategoryTool.js";
+import * as CreateCategoryGroupTool from "./tools/CreateCategoryGroupTool.js";
+import * as UpdateCategoryGroupTool from "./tools/UpdateCategoryGroupTool.js";
+import * as GetPayeeLocationByIdTool from "./tools/GetPayeeLocationByIdTool.js";
+import * as GetPayeeLocationsByPayeeTool from "./tools/GetPayeeLocationsByPayeeTool.js";
+import * as GetMoneyMovementsTool from "./tools/GetMoneyMovementsTool.js";
+import * as GetMoneyMovementGroupsTool from "./tools/GetMoneyMovementGroupsTool.js";
 
 const server = new McpServer({
   name: "ynab-mcp-server",
@@ -230,6 +238,54 @@ server.registerTool(GetUserTool.name, {
   description: GetUserTool.description,
   inputSchema: GetUserTool.inputSchema,
 }, async (input) => GetUserTool.execute(input, api));
+
+server.registerTool(CreatePayeeTool.name, {
+  title: "Create Payee",
+  description: CreatePayeeTool.description,
+  inputSchema: CreatePayeeTool.inputSchema,
+}, async (input) => CreatePayeeTool.execute(input));
+
+server.registerTool(CreateCategoryTool.name, {
+  title: "Create Category",
+  description: CreateCategoryTool.description,
+  inputSchema: CreateCategoryTool.inputSchema,
+}, async (input) => CreateCategoryTool.execute(input));
+
+server.registerTool(CreateCategoryGroupTool.name, {
+  title: "Create Category Group",
+  description: CreateCategoryGroupTool.description,
+  inputSchema: CreateCategoryGroupTool.inputSchema,
+}, async (input) => CreateCategoryGroupTool.execute(input));
+
+server.registerTool(UpdateCategoryGroupTool.name, {
+  title: "Update Category Group",
+  description: UpdateCategoryGroupTool.description,
+  inputSchema: UpdateCategoryGroupTool.inputSchema,
+}, async (input) => UpdateCategoryGroupTool.execute(input));
+
+server.registerTool(GetPayeeLocationByIdTool.name, {
+  title: "Get Payee Location By ID",
+  description: GetPayeeLocationByIdTool.description,
+  inputSchema: GetPayeeLocationByIdTool.inputSchema,
+}, async (input) => GetPayeeLocationByIdTool.execute(input));
+
+server.registerTool(GetPayeeLocationsByPayeeTool.name, {
+  title: "Get Payee Locations By Payee",
+  description: GetPayeeLocationsByPayeeTool.description,
+  inputSchema: GetPayeeLocationsByPayeeTool.inputSchema,
+}, async (input) => GetPayeeLocationsByPayeeTool.execute(input));
+
+server.registerTool(GetMoneyMovementsTool.name, {
+  title: "Get Money Movements",
+  description: GetMoneyMovementsTool.description,
+  inputSchema: GetMoneyMovementsTool.inputSchema,
+}, async (input) => GetMoneyMovementsTool.execute(input));
+
+server.registerTool(GetMoneyMovementGroupsTool.name, {
+  title: "Get Money Movement Groups",
+  description: GetMoneyMovementGroupsTool.description,
+  inputSchema: GetMoneyMovementGroupsTool.inputSchema,
+}, async (input) => GetMoneyMovementGroupsTool.execute(input));
 
 // Start the server
 async function main() {
