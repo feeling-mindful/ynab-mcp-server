@@ -1,6 +1,7 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
+import { getBudgetId } from "./budgetUtils.js";
 
 export const name = "ynab_delete_transaction";
 export const description = "Deletes a transaction from the budget. This action cannot be undone.";
@@ -12,14 +13,6 @@ export const inputSchema = {
 interface DeleteTransactionInput {
   budgetId?: string;
   transactionId: string;
-}
-
-function getBudgetId(inputBudgetId?: string): string {
-  const budgetId = inputBudgetId || process.env.YNAB_BUDGET_ID || "";
-  if (!budgetId) {
-    throw new Error("No budget ID provided. Please provide a budget ID or set the YNAB_BUDGET_ID environment variable.");
-  }
-  return budgetId;
 }
 
 export async function execute(input: DeleteTransactionInput, api: ynab.API) {

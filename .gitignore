@@ -16,3 +16,4 @@ dist
 !.env.example
 .premium
 tsconfig.tsbuildinfo
+.env*.local

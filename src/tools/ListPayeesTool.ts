@@ -1,6 +1,7 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
+import { getBudgetId } from "./budgetUtils.js";
 
 export const name = "ynab_list_payees";
 export const description = "Lists all payees in a budget. Useful for finding payee IDs when creating transactions.";
@@ -10,14 +11,6 @@ export const inputSchema = {
 
 interface ListPayeesInput {
   budgetId?: string;
-}
-
-function getBudgetId(inputBudgetId?: string): string {
-  const budgetId = inputBudgetId || process.env.YNAB_BUDGET_ID || "";
-  if (!budgetId) {
-    throw new Error("No budget ID provided. Please provide a budget ID or set the YNAB_BUDGET_ID environment variable.");
-  }
-  return budgetId;
 }
 
 export async function execute(input: ListPayeesInput, api: ynab.API) {

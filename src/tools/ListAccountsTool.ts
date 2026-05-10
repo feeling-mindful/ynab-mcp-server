@@ -1,6 +1,7 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
+import { getBudgetId } from "./budgetUtils.js";
 
 export const name = "ynab_list_accounts";
 export const description = "Lists all accounts in a budget. Useful for finding account IDs when creating transactions.";
@@ -12,14 +13,6 @@ export const inputSchema = {
 interface ListAccountsInput {
   budgetId?: string;
   includeClosedAccounts?: boolean;
-}
-
-function getBudgetId(inputBudgetId?: string): string {
-  const budgetId = inputBudgetId || process.env.YNAB_BUDGET_ID || "";
-  if (!budgetId) {
-    throw new Error("No budget ID provided. Please provide a budget ID or set the YNAB_BUDGET_ID environment variable.");
-  }
-  return budgetId;
 }
 
 export async function execute(input: ListAccountsInput, api: ynab.API) {

@@ -96,7 +96,7 @@ describe('ListBudgetsTool', () => {
 
       const result = await ListBudgetsTool.execute({}, mockApi as any);
 
-      expect(mockApi.budgets.getBudgets).toHaveBeenCalledWith();
+      expect(mockApi.budgets.getBudgets).toHaveBeenCalledWith(false);
 
       const expectedResult = {
         content: [{
@@ -119,7 +119,7 @@ describe('ListBudgetsTool', () => {
 
       const result = await ListBudgetsTool.execute({}, mockApi as any);
 
-      expect(mockApi.budgets.getBudgets).toHaveBeenCalledWith();
+      expect(mockApi.budgets.getBudgets).toHaveBeenCalledWith(false);
 
       const expectedResult = {
         content: [{
@@ -252,11 +252,11 @@ describe('ListBudgetsTool', () => {
   describe('tool configuration', () => {
     it('should have correct name and description', () => {
       expect(ListBudgetsTool.name).toBe('ynab_list_budgets');
-      expect(ListBudgetsTool.description).toBe('Lists all available budgets from YNAB API');
+      expect(ListBudgetsTool.description).toBe('Lists all available budgets from YNAB API. Optionally includes account information for each budget.');
     });
 
-    it('should have empty input schema', () => {
-      expect(ListBudgetsTool.inputSchema).toEqual({});
+    it('should have input schema with optional includeAccounts', () => {
+      expect(ListBudgetsTool.inputSchema).toHaveProperty('includeAccounts');
     });
   });
 });
