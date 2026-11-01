@@ -4,7 +4,6 @@ import {
   issueTokens,
   oauthConfig,
   oauthError,
-  redirectUriMatches,
   sha256Base64Url,
   safeEqual,
   verify,
@@ -47,8 +46,12 @@ export async function POST(req: Request) {
     const code = verify("code", form.get("code"), cfg.signingSecret);
     const redirectUri = form.get("redirect_uri");
     const verifier = form.get("code_verifier");
-    if (!code || code.client_id_hash !== cid) return oauthError("invalid_grant", "Invalid or expired code");
-    if (!redirectUri || !redirectUriMatches(code.redirect_uri, redirectUri)) {
+    if (!code || code.client_id_hash !== cid || code.resource !== cfg.resource) {
+      return oauthError("invalid_grant", "Invalid or expired code");
+    }
+    // RFC 6749 4.1.3: must be identical to the redirect_uri sent to /authorize,
+    // which is what the code is bound to (no loopback port leniency here).
+    if (!redirectUri || redirectUri !== code.redirect_uri) {
       return oauthError("invalid_grant", "redirect_uri does not match");
     }
     if (!verifier || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier) || !safeEqual(sha256Base64Url(verifier), code.code_challenge)) {
