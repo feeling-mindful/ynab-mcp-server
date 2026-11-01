@@ -1,7 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import * as ynab from "ynab";
+
+import { isOAuthConfigured, safeEqual, verifyAccessToken } from "../../lib/oauth";
 
 import * as ApproveTransactionTool from "../../src/tools/ApproveTransactionTool.js";
 import * as BudgetSummaryTool from "../../src/tools/BudgetSummaryTool.js";
@@ -102,6 +103,14 @@ const tools: ToolModule[] = [
   GetMoneyMovementGroupsTool,
 ] as ToolModule[];
 
+// Tools that change data in YNAB. Hidden unless YNAB_ALLOW_WRITES=true, so a
+// leaked MCP_API_KEY can read the budget but can't create, edit or delete anything.
+const WRITE_TOOL = /^ynab_(create|update|delete|approve|bulk_approve|import)_/;
+const writesAllowed = process.env.YNAB_ALLOW_WRITES === "true";
+const exposedTools = writesAllowed
+  ? tools
+  : tools.filter((tool) => !WRITE_TOOL.test(tool.name));
+
 const handler = createMcpHandler(
   (server) => {
     const ynabToken = process.env.YNAB_API_TOKEN;
@@ -112,7 +121,7 @@ const handler = createMcpHandler(
     }
     const api = new ynab.API(ynabToken);
 
-    for (const tool of tools) {
+    for (const tool of exposedTools) {
       server.registerTool(
         tool.name,
         {
@@ -136,35 +145,46 @@ const handler = createMcpHandler(
   },
 );
 
-function timingSafeCompare(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, "utf8");
-  const bufB = Buffer.from(b, "utf8");
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
-
 const verifyToken = async (
   _req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> => {
-  const expected = process.env.MCP_API_KEY;
-  if (!expected) {
+  const apiKey = process.env.MCP_API_KEY;
+  if (!apiKey && !isOAuthConfigured()) {
     throw new Error(
-      "MCP_API_KEY env var is required. Set it in the Vercel project settings.",
+      "Set MCP_API_KEY and/or the OAuth env vars (MCP_PUBLIC_URL, OAUTH_SIGNING_SECRET, OAUTH_LOGIN_PASSWORD).",
     );
   }
   if (!bearerToken) return undefined;
-  if (!timingSafeCompare(bearerToken, expected)) return undefined;
 
-  return {
-    token: bearerToken,
-    scopes: ["ynab:full"],
-    clientId: "ynab-mcp-server",
-  };
+  // Static key, used by clients that send a fixed bearer (e.g. Perplexity).
+  if (apiKey && safeEqual(bearerToken, apiKey)) {
+    return {
+      token: bearerToken,
+      scopes: ["ynab:full"],
+      clientId: "ynab-mcp-server",
+    };
+  }
+
+  // OAuth access token, used by claude.ai custom connectors.
+  const oauth = verifyAccessToken(bearerToken);
+  if (oauth) {
+    return {
+      token: bearerToken,
+      scopes: oauth.scope.split(" "),
+      clientId: `oauth:${oauth.client_id_hash.slice(0, 12)}`,
+      expiresAt: oauth.exp,
+    };
+  }
+
+  return undefined;
 };
 
 const authHandler = withMcpAuth(handler, verifyToken, {
   required: true,
+  // Point the 401's resource_metadata at the configured public URL rather than
+  // trusting forwarded host headers.
+  resourceUrl: process.env.MCP_PUBLIC_URL?.replace(/\/+$/, "") || undefined,
 });
 
 export { authHandler as GET, authHandler as POST, authHandler as DELETE };

@@ -66,6 +66,11 @@ This fork additionally exposes the server over HTTP for clients that connect to 
    - `YNAB_API_TOKEN` — your YNAB Personal Access Token (single-tenant: only your budgets are accessible).
    - `YNAB_BUDGET_ID` — (optional) default budget ID used when tools don't receive one.
    - `MCP_API_KEY` — a long random string. Clients must send this as `Authorization: Bearer <MCP_API_KEY>` to access the server.
+   - `YNAB_ALLOW_WRITES` — (optional) set to `true` to expose tools that create, update, approve, import or delete. Off by default, so the server is read-only.
+   - For claude.ai sign-in (OAuth), all three of:
+     - `MCP_PUBLIC_URL` — the public base URL, e.g. `https://<your-app>.vercel.app` (no trailing slash).
+     - `OAUTH_SIGNING_SECRET` — at least 32 random characters. Rotating it signs out every OAuth client without touching `MCP_API_KEY`.
+     - `OAUTH_LOGIN_PASSWORD` — at least 32 random characters, typed on the sign-in page. Keep it in a password manager.
 3. Deploy. Endpoints:
    - `https://<your-app>.vercel.app/mcp` — Streamable HTTP transport
    - `https://<your-app>.vercel.app/sse` — Server-Sent Events transport
@@ -77,6 +82,12 @@ Account settings → Connectors → **+ Custom connector** → **Remote**:
 - **Authentication**: API Key
 - **API Key**: the value of your `MCP_API_KEY` env var
 - **Transport**: Streamable HTTP (or SSE if you used `/sse`)
+
+### Connect from claude.ai
+
+Settings → Connectors → **Add custom connector**:
+- **URL**: `https://<your-app>.vercel.app/mcp` (must match `MCP_PUBLIC_URL` + `/mcp` exactly)
+- Leave the OAuth client fields empty. Claude registers itself, then opens a sign-in page where you enter `OAUTH_LOGIN_PASSWORD`.
 
 ### Local dev
 
