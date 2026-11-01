@@ -22,7 +22,11 @@ export async function POST(req: Request) {
 
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    const parsed: unknown = await req.json();
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return oauthError("invalid_client_metadata", "Body must be a JSON object");
+    }
+    body = parsed as Record<string, unknown>;
   } catch {
     return oauthError("invalid_client_metadata", "Body must be JSON");
   }

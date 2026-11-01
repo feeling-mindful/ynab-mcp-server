@@ -23,6 +23,19 @@ const PAGE_HEADERS = {
   "Referrer-Policy": "no-referrer",
 };
 
+/**
+ * Chromium applies form-action to the redirect that follows a form POST, so
+ * the sign-in form must also allow the (already validated) callback origin,
+ * or the 303 back to Claude is blocked.
+ */
+function formPageHeaders(redirectUri: string) {
+  const callbackOrigin = new URL(redirectUri).origin;
+  return {
+    ...PAGE_HEADERS,
+    "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${callbackOrigin}; frame-ancestors 'none'`,
+  };
+}
+
 const PARAMS = [
   "response_type",
   "client_id",
@@ -105,7 +118,7 @@ ${hidden}
 <button type="submit" style="padding:.5rem 1rem;font-size:1rem">Allow access</button>
 </form>
 </body></html>`,
-    { status, headers: PAGE_HEADERS },
+    { status, headers: formPageHeaders(redirectUri) },
   );
 }
 
