@@ -58,16 +58,28 @@ export function isOAuthConfigured(): boolean {
   }
 }
 
+function parseUrl(uri: string): URL | undefined {
+  try {
+    return new URL(uri);
+  } catch {
+    return undefined; // e.g. a loopback port above 65535
+  }
+}
+
+function isLoopback(uri: string): boolean {
+  return LOOPBACK.test(uri) && parseUrl(uri) !== undefined;
+}
+
 export function isAllowedRedirectUri(uri: string): boolean {
-  return HOSTED_CALLBACKS.has(uri) || LOOPBACK.test(uri);
+  return HOSTED_CALLBACKS.has(uri) || isLoopback(uri);
 }
 
 /** Loopback redirects match regardless of port (RFC 8252 section 7.3). */
 export function redirectUriMatches(registered: string, presented: string): boolean {
-  if (registered === presented) return true;
-  if (!LOOPBACK.test(registered) || !LOOPBACK.test(presented)) return false;
-  const a = new URL(registered);
-  const b = new URL(presented);
+  if (registered === presented) return isAllowedRedirectUri(presented);
+  if (!isLoopback(registered) || !isLoopback(presented)) return false;
+  const a = parseUrl(registered) as URL;
+  const b = parseUrl(presented) as URL;
   return a.hostname === b.hostname && a.pathname === b.pathname;
 }
 
