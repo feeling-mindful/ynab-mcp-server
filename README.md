@@ -57,7 +57,7 @@ Next:
 
 ## URL-based deployment (Vercel)
 
-This fork additionally exposes the server over HTTP for clients that connect to a remote MCP URL (e.g. Perplexity custom remote connectors).
+This fork additionally exposes the server over HTTP for clients that connect to a remote MCP URL (e.g. claude.ai custom connectors). Set up at least one way in: OAuth sign-in, a static `MCP_API_KEY`, or both. With neither, every request is refused.
 
 ### Deploy
 
@@ -65,17 +65,17 @@ This fork additionally exposes the server over HTTP for clients that connect to 
 2. Set the following environment variables in Vercel:
    - `YNAB_API_TOKEN` — your YNAB Personal Access Token (single-tenant: only your budgets are accessible).
    - `YNAB_BUDGET_ID` — (optional) default budget ID used when tools don't receive one.
-   - `MCP_API_KEY` — a long random string. Clients must send this as `Authorization: Bearer <MCP_API_KEY>` to access the server.
+   - `MCP_API_KEY` — (optional) a long random string, for clients that can only send a fixed bearer (`Authorization: Bearer <MCP_API_KEY>`), such as Perplexity. Leave it unset to accept OAuth sign-in only.
    - `YNAB_ALLOW_WRITES` — (optional) set to `true` to expose tools that create, update, approve, import or delete. Off by default, so the server is read-only.
    - For claude.ai sign-in (OAuth), all three of:
      - `MCP_PUBLIC_URL` — the public base URL, e.g. `https://<your-app>.vercel.app` (no trailing slash).
-     - `OAUTH_SIGNING_SECRET` — at least 32 random characters. Rotating it signs out every OAuth client without touching `MCP_API_KEY`.
+     - `OAUTH_SIGNING_SECRET` — at least 32 random characters. Rotating it signs out every OAuth client.
      - `OAUTH_LOGIN_PASSWORD` — at least 32 random characters, typed on the sign-in page. Keep it in a password manager.
 3. Deploy. Endpoints:
    - `https://<your-app>.vercel.app/mcp` — Streamable HTTP transport
    - `https://<your-app>.vercel.app/sse` — Server-Sent Events transport
 
-### Connect from Perplexity
+### Connect from Perplexity (needs `MCP_API_KEY`)
 
 Account settings → Connectors → **+ Custom connector** → **Remote**:
 - **MCP Server URL**: `https://<your-app>.vercel.app/mcp` (or `/sse`)

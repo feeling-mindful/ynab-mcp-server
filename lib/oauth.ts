@@ -4,7 +4,7 @@
  * Stateless: client IDs, authorization codes, access tokens and refresh tokens
  * are all HMAC-signed blobs, so nothing needs a database. Rotating
  * OAUTH_SIGNING_SECRET revokes every OAuth client and token at once without
- * touching MCP_API_KEY (which other clients such as Perplexity keep using).
+ * touching MCP_API_KEY, if one is set.
  *
  * Env vars:
  *   MCP_PUBLIC_URL        Public base URL, e.g. https://example.vercel.app (no trailing slash)
@@ -218,7 +218,7 @@ export function verifyAccessToken(token: string): AccessPayload | undefined {
   try {
     cfg = oauthConfig();
   } catch {
-    return undefined; // OAuth disabled: only MCP_API_KEY works.
+    return undefined; // OAuth disabled.
   }
   const payload = verify("access", token, cfg.signingSecret);
   if (!payload || payload.aud !== cfg.resource) return undefined;

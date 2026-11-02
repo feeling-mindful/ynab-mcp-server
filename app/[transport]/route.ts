@@ -1,8 +1,7 @@
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import * as ynab from "ynab";
 
-import { isOAuthConfigured, safeEqual, verifyAccessToken } from "../../lib/oauth";
+import { verifyBearer } from "../../lib/verify-bearer";
 
 import * as ApproveTransactionTool from "../../src/tools/ApproveTransactionTool.js";
 import * as BudgetSummaryTool from "../../src/tools/BudgetSummaryTool.js";
@@ -104,7 +103,7 @@ const tools: ToolModule[] = [
 ] as ToolModule[];
 
 // Tools that change data in YNAB. Hidden unless YNAB_ALLOW_WRITES=true, so a
-// leaked MCP_API_KEY can read the budget but can't create, edit or delete anything.
+// leaked credential can read the budget but can't create, edit or delete anything.
 const WRITE_TOOL = /^ynab_(create|update|delete|approve|bulk_approve|import)_/;
 const writesAllowed = process.env.YNAB_ALLOW_WRITES === "true";
 const exposedTools = writesAllowed
@@ -145,42 +144,7 @@ const handler = createMcpHandler(
   },
 );
 
-const verifyToken = async (
-  _req: Request,
-  bearerToken?: string,
-): Promise<AuthInfo | undefined> => {
-  const apiKey = process.env.MCP_API_KEY;
-  if (!apiKey && !isOAuthConfigured()) {
-    throw new Error(
-      "Set MCP_API_KEY and/or the OAuth env vars (MCP_PUBLIC_URL, OAUTH_SIGNING_SECRET, OAUTH_LOGIN_PASSWORD).",
-    );
-  }
-  if (!bearerToken) return undefined;
-
-  // Static key, used by clients that send a fixed bearer (e.g. Perplexity).
-  if (apiKey && safeEqual(bearerToken, apiKey)) {
-    return {
-      token: bearerToken,
-      scopes: ["ynab:full"],
-      clientId: "ynab-mcp-server",
-    };
-  }
-
-  // OAuth access token, used by claude.ai custom connectors.
-  const oauth = verifyAccessToken(bearerToken);
-  if (oauth) {
-    return {
-      token: bearerToken,
-      scopes: oauth.scope.split(" "),
-      clientId: `oauth:${oauth.client_id_hash.slice(0, 12)}`,
-      expiresAt: oauth.exp,
-    };
-  }
-
-  return undefined;
-};
-
-const authHandler = withMcpAuth(handler, verifyToken, {
+const authHandler = withMcpAuth(handler, verifyBearer, {
   required: true,
   // Point the 401's resource_metadata at the configured public URL rather than
   // trusting forwarded host headers.
