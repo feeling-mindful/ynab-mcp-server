@@ -24,6 +24,7 @@ interface YnabStub {
   userId: string;
   tokenStatus?: number;
   refreshStatus?: number;
+  refreshError?: string;
   calls: { url: string; body?: URLSearchParams; auth?: string | null }[];
 }
 
@@ -37,7 +38,10 @@ function stubYnab(stub: YnabStub) {
     if (url === 'https://app.ynab.com/oauth/token') {
       const isRefresh = body?.get('grant_type') === 'refresh_token';
       const status = isRefresh ? stub.refreshStatus ?? 200 : stub.tokenStatus ?? 200;
-      if (status !== 200) return new Response('{"error":"invalid_grant"}', { status });
+      if (status !== 200) {
+        const error = isRefresh ? stub.refreshError ?? 'invalid_grant' : 'invalid_grant';
+        return new Response(JSON.stringify({ error }), { status });
+      }
       issued += 1;
       return Response.json({
         access_token: `ynab-access-${issued}`,
@@ -210,7 +214,7 @@ describe('sign in with YNAB', () => {
 
     it('revoked YNAB grant: invalid_grant, so Claude signs in again', async () => {
       const { clientId, tokens } = await signedIn();
-      stub.refreshStatus = 401;
+      stub.refreshStatus = 400;
       const res = await tokenRequest({ grant_type: 'refresh_token', client_id: clientId, refresh_token: tokens.refresh_token });
       expect(res.status).toBe(400);
       expect((await res.json()).error).toBe('invalid_grant');
@@ -222,6 +226,20 @@ describe('sign in with YNAB', () => {
       const res = await tokenRequest({ grant_type: 'refresh_token', client_id: clientId, refresh_token: tokens.refresh_token });
       expect(res.status).toBe(503);
       expect((await res.json()).error).toBe('temporarily_unavailable');
+    });
+
+    it('wrong client secret: temporarily_unavailable, not a sign-in loop', async () => {
+      const { clientId, tokens } = await signedIn();
+      stub.refreshStatus = 401;
+      stub.refreshError = 'invalid_client';
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const res = await tokenRequest({ grant_type: 'refresh_token', client_id: clientId, refresh_token: tokens.refresh_token });
+      expect(res.status).toBe(503);
+      expect((await res.json()).error).toBe('temporarily_unavailable');
+      expect(warn).toHaveBeenCalledOnce();
+      expect(String(warn.mock.calls[0][0])).toContain('invalid_client');
+      expect(String(warn.mock.calls[0][0])).not.toContain('ynab-client-secret');
+      warn.mockRestore();
     });
 
     it('tampered refresh token: refused without calling YNAB', async () => {

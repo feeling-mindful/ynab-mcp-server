@@ -28,6 +28,27 @@ export function ynabAuthorizeUrl(cfg: OAuthConfig, state: string, codeChallenge:
   return url.toString();
 }
 
+/**
+ * Only a grant that YNAB itself calls invalid means the user must sign in again.
+ * A client error (wrong client id or secret, bad redirect URI) is our own
+ * misconfiguration: report it as unavailable so the user isn't sent round a
+ * sign-in loop that can never succeed, and log the error code (never a secret).
+ */
+async function classifyTokenError(res: Response): Promise<"invalid_grant" | "unavailable"> {
+  let code: unknown;
+  try {
+    code = ((await res.json()) as { error?: unknown }).error;
+  } catch {
+    code = undefined;
+  }
+  if (code === "invalid_grant") return "invalid_grant";
+  if (code === undefined && res.status === 400) return "invalid_grant";
+  console.warn(
+    `YNAB token endpoint refused the request (status ${res.status}, error ${typeof code === "string" ? code : "unknown"}); check YNAB_OAUTH_CLIENT_ID, YNAB_OAUTH_CLIENT_SECRET and the redirect URI`,
+  );
+  return "unavailable";
+}
+
 async function tokenRequest(
   params: Record<string, string>,
   previousRefreshToken?: string,
@@ -44,7 +65,7 @@ async function tokenRequest(
     return { ok: false, error: "unavailable" };
   }
   if (res.status >= 500 || res.status === 429) return { ok: false, error: "unavailable" };
-  if (!res.ok) return { ok: false, error: "invalid_grant" };
+  if (!res.ok) return { ok: false, error: await classifyTokenError(res) };
   let body: Record<string, unknown>;
   try {
     body = (await res.json()) as Record<string, unknown>;
