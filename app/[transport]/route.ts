@@ -1,7 +1,8 @@
-import { timingSafeEqual } from "node:crypto";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import * as ynab from "ynab";
+
+import { verifyBearer } from "../../lib/verify-bearer";
+import { ynabTokenContext } from "../../src/tools/apiUtils.js";
 
 import * as ApproveTransactionTool from "../../src/tools/ApproveTransactionTool.js";
 import * as BudgetSummaryTool from "../../src/tools/BudgetSummaryTool.js";
@@ -102,17 +103,17 @@ const tools: ToolModule[] = [
   GetMoneyMovementGroupsTool,
 ] as ToolModule[];
 
+// Tools that change data in YNAB. Hidden unless YNAB_ALLOW_WRITES=true, so a
+// leaked credential can read the budget but can't create, edit or delete anything.
+const WRITE_TOOL = /^ynab_(create|update|delete|approve|bulk_approve|import)_/;
+const writesAllowed = process.env.YNAB_ALLOW_WRITES === "true";
+const exposedTools = writesAllowed
+  ? tools
+  : tools.filter((tool) => !WRITE_TOOL.test(tool.name));
+
 const handler = createMcpHandler(
   (server) => {
-    const ynabToken = process.env.YNAB_API_TOKEN;
-    if (!ynabToken) {
-      throw new Error(
-        "YNAB_API_TOKEN env var is required. Set it in the Vercel project settings.",
-      );
-    }
-    const api = new ynab.API(ynabToken);
-
-    for (const tool of tools) {
+    for (const tool of exposedTools) {
       server.registerTool(
         tool.name,
         {
@@ -121,10 +122,23 @@ const handler = createMcpHandler(
           inputSchema: tool.inputSchema as any,
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async (input: any) =>
-          (await tool.execute(input, api)) as {
-            content: Array<{ type: "text"; text: string }>;
-          },
+        async (input: any, extra: any) => {
+          // The token comes from whoever authenticated this request: the
+          // signed-in YNAB user for OAuth, or YNAB_API_TOKEN for MCP_API_KEY.
+          const ynabToken = extra?.authInfo?.extra?.ynabToken;
+          if (typeof ynabToken !== "string" || !ynabToken) {
+            return {
+              content: [{ type: "text" as const, text: "No YNAB token for this request. Sign in again, or set YNAB_API_TOKEN for MCP_API_KEY clients." }],
+              isError: true,
+            };
+          }
+          const api = new ynab.API(ynabToken);
+          return ynabTokenContext.run(ynabToken, async () =>
+            (await tool.execute(input, api)) as {
+              content: Array<{ type: "text"; text: string }>;
+            },
+          );
+        },
       );
     }
   },
@@ -136,35 +150,11 @@ const handler = createMcpHandler(
   },
 );
 
-function timingSafeCompare(a: string, b: string): boolean {
-  const bufA = Buffer.from(a, "utf8");
-  const bufB = Buffer.from(b, "utf8");
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
-
-const verifyToken = async (
-  _req: Request,
-  bearerToken?: string,
-): Promise<AuthInfo | undefined> => {
-  const expected = process.env.MCP_API_KEY;
-  if (!expected) {
-    throw new Error(
-      "MCP_API_KEY env var is required. Set it in the Vercel project settings.",
-    );
-  }
-  if (!bearerToken) return undefined;
-  if (!timingSafeCompare(bearerToken, expected)) return undefined;
-
-  return {
-    token: bearerToken,
-    scopes: ["ynab:full"],
-    clientId: "ynab-mcp-server",
-  };
-};
-
-const authHandler = withMcpAuth(handler, verifyToken, {
+const authHandler = withMcpAuth(handler, verifyBearer, {
   required: true,
+  // Point the 401's resource_metadata at the configured public URL rather than
+  // trusting forwarded host headers.
+  resourceUrl: process.env.MCP_PUBLIC_URL?.replace(/\/+$/, "") || undefined,
 });
 
 export { authHandler as GET, authHandler as POST, authHandler as DELETE };

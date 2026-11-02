@@ -1,6 +1,7 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
+import { currentYnabToken } from "./apiUtils.js";
 
 export const name = "ynab_list_budgets";
 export const description = "Lists all available budgets from YNAB API. Optionally includes account information for each budget.";
@@ -14,7 +15,7 @@ interface ListBudgetsInput {
 
 export async function execute(input: ListBudgetsInput, api: ynab.API) {
   try {
-    if (!process.env.YNAB_API_TOKEN) {
+    if (!currentYnabToken()) {
       return {
         content: [{ type: "text" as const, text: "YNAB API Token is not set" }]
       };

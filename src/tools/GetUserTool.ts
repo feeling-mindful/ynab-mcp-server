@@ -1,6 +1,7 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
+import { currentYnabToken } from "./apiUtils.js";
 
 export const name = "ynab_get_user";
 export const description = "Returns information about the authenticated YNAB user.";
@@ -8,7 +9,7 @@ export const inputSchema = {};
 
 export async function execute(_input: Record<string, unknown>, api: ynab.API) {
   try {
-    if (!process.env.YNAB_API_TOKEN) {
+    if (!currentYnabToken()) {
       return {
         content: [{ type: "text" as const, text: "YNAB API Token is not set" }]
       };
