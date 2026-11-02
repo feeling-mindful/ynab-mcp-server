@@ -18,6 +18,11 @@ import { ynabAuthorizeUrl } from "../../lib/ynab-oauth";
 
 export const dynamic = "force-dynamic";
 
+/** Longest parameter we accept. Values are never cut short, since a changed state would fail Claude's own check. */
+const MAX_PARAM_LENGTH = 2048;
+/** verify() refuses signed values longer than this, so the callback would refuse a longer state. */
+const MAX_SIGNED_LENGTH = 8192;
+
 const PARAMS = [
   "response_type",
   "client_id",
@@ -79,7 +84,9 @@ export function GET(req: Request) {
   const p: Params = {};
   for (const k of PARAMS) {
     const v = search.get(k);
-    if (v !== null) p[k] = v.slice(0, 4096);
+    if (v === null) continue;
+    if (v.length > MAX_PARAM_LENGTH) return errorPage("This sign-in request is too long.");
+    p[k] = v;
   }
   const v = validate(p, cfg);
   if (!v.ok) return v.response;
@@ -95,6 +102,7 @@ export function GET(req: Request) {
     { n: nonce, client_id: v.clientId, redirect_uri: v.redirectUri, code_challenge: v.codeChallenge, state: v.state, exp },
     cfg.signingSecret,
   );
+  if (state.length > MAX_SIGNED_LENGTH) return errorPage("This sign-in request is too long.");
   const cookie = sign("ycookie", { n: nonce, v: verifier, exp }, cfg.signingSecret);
 
   return new Response(null, {

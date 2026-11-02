@@ -67,7 +67,7 @@ function startSignIn(clientId: string, claudePkce = pkce(), state = 'claude-stat
   url.searchParams.set('code_challenge_method', 'S256');
   url.searchParams.set('state', state);
   const res = authorize(new Request(url));
-  const location = new URL(res.headers.get('location') ?? '');
+  const location = new URL(res.headers.get('location') ?? 'about:blank');
   const setCookie = res.headers.get('set-cookie') ?? '';
   const cookie = setCookie.split(';')[0];
   return { res, location, setCookie, cookie, ynabState: location.searchParams.get('state') ?? '', claudePkce };
@@ -150,6 +150,22 @@ describe('sign in with YNAB', () => {
     const body = await tokens.json();
     const info = await verifyBearer(new Request(`${BASE}/mcp`), body.access_token);
     expect(info?.extra?.ynabToken).toBe('ynab-access-1');
+  });
+
+  it('returns Claude\'s state unchanged, including long non-ASCII states', async () => {
+    const longState = 'é🙂'.repeat(682); // 2,046 UTF-16 units, about 4 KB as UTF-8
+    const s = startSignIn(registeredClient(), pkce(), longState);
+    expect(s.res.status).toBe(302);
+    const res = await finish(s.ynabState, s.cookie);
+    const back = new URL(res.headers.get('location') ?? '');
+    expect(back.searchParams.get('state')).toBe(longState);
+  });
+
+  it('oversized state: refused on a page, never cut short or sent on', () => {
+    const s = startSignIn(registeredClient(), pkce(), 'x'.repeat(2049));
+    expect(s.res.status).toBe(400);
+    expect(s.res.headers.get('location')).toBeNull();
+    expect(s.res.headers.get('set-cookie')).toBeNull();
   });
 
   it('other YNAB user: refused, no code issued', async () => {
