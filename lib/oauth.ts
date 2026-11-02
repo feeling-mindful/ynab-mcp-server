@@ -172,7 +172,7 @@ export function verify<K extends Kind>(
   try {
     const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
     if (typeof payload !== "object" || payload === null) return undefined;
-    if ("exp" in payload && (typeof payload.exp !== "number" || payload.exp < nowSeconds())) {
+    if ("exp" in payload && (typeof payload.exp !== "number" || payload.exp <= nowSeconds())) {
       return undefined;
     }
     return payload as PayloadByKind[K];
