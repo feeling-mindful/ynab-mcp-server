@@ -57,37 +57,37 @@ Next:
 
 ## URL-based deployment (Vercel)
 
-This fork additionally exposes the server over HTTP for clients that connect to a remote MCP URL (e.g. claude.ai custom connectors). Set up at least one way in: OAuth sign-in, a static `MCP_API_KEY`, or both. With neither, every request is refused.
+This fork additionally exposes the server over HTTP for clients that connect to a remote MCP URL (e.g. claude.ai custom connectors). Set up at least one way in: sign in with YNAB (OAuth), a static `MCP_API_KEY`, or both. With neither, every request is refused.
 
 ### Deploy
 
 1. Connect this repo to a Vercel project (`vercel link` or via the Vercel dashboard).
-2. Set the following environment variables in Vercel:
-   - `YNAB_API_TOKEN` — your YNAB Personal Access Token (single-tenant: only your budgets are accessible).
-   - `YNAB_BUDGET_ID` — (optional) default budget ID used when tools don't receive one.
-   - `MCP_API_KEY` — (optional) a long random string, for clients that can only send a fixed bearer (`Authorization: Bearer <MCP_API_KEY>`), such as Perplexity. Leave it unset to accept OAuth sign-in only.
+2. For claude.ai, create a YNAB OAuth application (YNAB → Account Settings → Developer Settings → New OAuth Application) with the redirect URI `https://<your-app>.vercel.app/ynab/callback`.
+3. Set these environment variables in Vercel:
+   - `MCP_PUBLIC_URL` — the public base URL, e.g. `https://<your-app>.vercel.app` (no trailing slash).
+   - `OAUTH_SIGNING_SECRET` — at least 32 random characters. It signs and encrypts every token; rotating it signs out every client.
+   - `YNAB_OAUTH_CLIENT_ID` and `YNAB_OAUTH_CLIENT_SECRET` — from the YNAB OAuth application.
+   - `ALLOWED_YNAB_USER_ID` — the one YNAB user id allowed to sign in (`curl -H "Authorization: Bearer <personal access token>" https://api.ynab.com/v1/user`, or sign in once and the refusal page shows it).
    - `YNAB_ALLOW_WRITES` — (optional) set to `true` to expose tools that create, update, approve, import or delete. Off by default, so the server is read-only.
-   - For claude.ai sign-in (OAuth), all three of:
-     - `MCP_PUBLIC_URL` — the public base URL, e.g. `https://<your-app>.vercel.app` (no trailing slash).
-     - `OAUTH_SIGNING_SECRET` — at least 32 random characters. Rotating it signs out every OAuth client.
-     - `OAUTH_LOGIN_PASSWORD` — at least 32 random characters, typed on the sign-in page. Keep it in a password manager.
-3. Deploy. Endpoints:
+   - `YNAB_BUDGET_ID` — (optional) default budget ID used when tools don't receive one.
+   - `MCP_API_KEY` and `YNAB_API_TOKEN` — (optional) only for clients that can only send a fixed bearer, such as Perplexity. They send `Authorization: Bearer <MCP_API_KEY>`, and the server acts with the `YNAB_API_TOKEN` personal access token. Leave both unset to accept YNAB sign-in only.
+4. Deploy. Endpoints:
    - `https://<your-app>.vercel.app/mcp` — Streamable HTTP transport
    - `https://<your-app>.vercel.app/sse` — Server-Sent Events transport
 
-### Connect from Perplexity (needs `MCP_API_KEY`)
+### Connect from claude.ai
+
+Settings → Connectors → **Add custom connector**:
+- **URL**: `https://<your-app>.vercel.app/mcp` (must match `MCP_PUBLIC_URL` + `/mcp` exactly)
+- Leave the OAuth client fields empty. Claude registers itself and sends you to sign in with YNAB. The server then acts with that sign-in's YNAB token, refreshing it as needed.
+
+### Connect from Perplexity (needs `MCP_API_KEY` and `YNAB_API_TOKEN`)
 
 Account settings → Connectors → **+ Custom connector** → **Remote**:
 - **MCP Server URL**: `https://<your-app>.vercel.app/mcp` (or `/sse`)
 - **Authentication**: API Key
 - **API Key**: the value of your `MCP_API_KEY` env var
 - **Transport**: Streamable HTTP (or SSE if you used `/sse`)
-
-### Connect from claude.ai
-
-Settings → Connectors → **Add custom connector**:
-- **URL**: `https://<your-app>.vercel.app/mcp` (must match `MCP_PUBLIC_URL` + `/mcp` exactly)
-- Leave the OAuth client fields empty. Claude registers itself, then opens a sign-in page where you enter `OAUTH_LOGIN_PASSWORD`.
 
 ### Local dev
 

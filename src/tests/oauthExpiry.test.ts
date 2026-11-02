@@ -10,37 +10,31 @@ import {
   verify,
 } from '../../lib/oauth';
 import { verifyBearer } from '../../lib/verify-bearer';
+import { grant, restoreEnv, saveAndClearEnv, setOAuthEnv } from './oauthTestUtils';
 
-const ENV_KEYS = ['MCP_API_KEY', 'MCP_PUBLIC_URL', 'OAUTH_SIGNING_SECRET', 'OAUTH_LOGIN_PASSWORD'] as const;
 const START = new Date('2026-01-01T00:00:00Z');
 const req = new Request('https://example.test/mcp');
 
 describe('OAuth token expiry', () => {
-  const saved: Record<string, string | undefined> = {};
+  let saved: Record<string, string | undefined>;
 
   beforeEach(() => {
-    for (const k of ENV_KEYS) saved[k] = process.env[k];
-    delete process.env.MCP_API_KEY;
-    process.env.MCP_PUBLIC_URL = 'https://example.test';
-    process.env.OAUTH_SIGNING_SECRET = 's'.repeat(40);
-    process.env.OAUTH_LOGIN_PASSWORD = 'p'.repeat(40);
+    saved = saveAndClearEnv();
+    setOAuthEnv();
     vi.useFakeTimers();
     vi.setSystemTime(START);
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    for (const k of ENV_KEYS) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
+    restoreEnv(saved);
   });
 
   const advance = (seconds: number) => vi.setSystemTime(START.getTime() + seconds * 1000);
 
   it('access token: valid until its last second, rejected at and after expiry (also via verifyBearer)', async () => {
     const cfg = oauthConfig();
-    const { access_token } = issueTokens('c', 'ynab', cfg);
+    const { access_token } = issueTokens('c', 'ynab', cfg, grant());
 
     advance(ACCESS_TOKEN_TTL - 1);
     expect(verify('access', access_token, cfg.signingSecret)).toBeDefined();
@@ -54,9 +48,25 @@ describe('OAuth token expiry', () => {
     expect(await verifyBearer(req, access_token)).toBeUndefined();
   });
 
+  it('access token never outlives the YNAB token it carries', async () => {
+    const cfg = oauthConfig();
+    const ynabExpiresIn = 600;
+    const issued = issueTokens('c', 'ynab', cfg, grant({ expiresAt: nowSeconds() + ynabExpiresIn }));
+    expect(issued.expires_in).toBe(ynabExpiresIn - 60);
+
+    advance(ynabExpiresIn - 61);
+    expect(await verifyBearer(req, issued.access_token)).toBeDefined();
+    advance(ynabExpiresIn - 60);
+    expect(await verifyBearer(req, issued.access_token)).toBeUndefined();
+  });
+
+  it('refuses to issue tokens for a YNAB token about to expire', () => {
+    expect(() => issueTokens('c', 'ynab', oauthConfig(), grant({ expiresAt: nowSeconds() + 30 }))).toThrow();
+  });
+
   it('refresh token: valid until its last second, rejected at and after expiry', () => {
     const cfg = oauthConfig();
-    const { refresh_token } = issueTokens('c', 'ynab', cfg);
+    const { refresh_token } = issueTokens('c', 'ynab', cfg, grant());
 
     advance(REFRESH_TOKEN_TTL - 1);
     expect(verify('refresh', refresh_token, cfg.signingSecret)).toBeDefined();

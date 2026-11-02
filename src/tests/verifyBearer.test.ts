@@ -1,42 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { issueTokens, oauthConfig } from '../../lib/oauth';
 import { verifyBearer } from '../../lib/verify-bearer';
-
-const ENV_KEYS = [
-  'MCP_API_KEY',
-  'MCP_PUBLIC_URL',
-  'OAUTH_SIGNING_SECRET',
-  'OAUTH_LOGIN_PASSWORD',
-] as const;
+import { OTHER_USER, grant, restoreEnv, saveAndClearEnv, setOAuthEnv } from './oauthTestUtils';
 
 const req = new Request('https://example.test/mcp');
-
-function setOAuthEnv() {
-  process.env.MCP_PUBLIC_URL = 'https://example.test';
-  process.env.OAUTH_SIGNING_SECRET = 's'.repeat(40);
-  process.env.OAUTH_LOGIN_PASSWORD = 'p'.repeat(40);
-}
-
-function accessToken() {
-  return issueTokens('test-client', 'ynab', oauthConfig()).access_token;
-}
+const accessToken = (g = grant()) => issueTokens('test-client', 'ynab', oauthConfig(), g).access_token;
 
 describe('verifyBearer', () => {
-  const saved: Record<string, string | undefined> = {};
-
+  let saved: Record<string, string | undefined>;
   beforeEach(() => {
-    for (const k of ENV_KEYS) {
-      saved[k] = process.env[k];
-      delete process.env[k];
-    }
+    saved = saveAndClearEnv();
   });
-
-  afterEach(() => {
-    for (const k of ENV_KEYS) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
-  });
+  afterEach(() => restoreEnv(saved));
 
   it('fails closed when neither MCP_API_KEY nor OAuth is configured', async () => {
     await expect(verifyBearer(req, 'anything')).rejects.toThrow();
@@ -50,12 +25,19 @@ describe('verifyBearer', () => {
   describe('OAuth only, no MCP_API_KEY', () => {
     beforeEach(setOAuthEnv);
 
-    it('accepts a valid OAuth access token', async () => {
+    it('accepts a valid access token and hands over the YNAB token it carries', async () => {
       const token = accessToken();
       const info = await verifyBearer(req, token);
       expect(info?.token).toBe(token);
       expect(info?.clientId).toMatch(/^oauth:/);
-      expect(info?.scopes).toEqual(['ynab']);
+      expect(info?.extra?.ynabToken).toBe('ynab-access-1');
+    });
+
+    it('never exposes the YNAB token in the access token itself', () => {
+      const token = accessToken();
+      const body = Buffer.from(token.split('.')[0], 'base64url').toString('utf8');
+      expect(body).not.toContain('ynab-access-1');
+      expect(body).not.toContain('ynab-refresh-1');
     });
 
     it('rejects a missing, random or tampered bearer', async () => {
@@ -65,16 +47,30 @@ describe('verifyBearer', () => {
     });
 
     it('rejects a refresh token used as an access token', async () => {
-      const { refresh_token } = issueTokens('test-client', 'ynab', oauthConfig());
+      const { refresh_token } = issueTokens('test-client', 'ynab', oauthConfig(), grant());
       expect(await verifyBearer(req, refresh_token)).toBeUndefined();
+    });
+
+    it('rejects tokens for a YNAB user that is no longer allowed', async () => {
+      const token = accessToken();
+      process.env.ALLOWED_YNAB_USER_ID = OTHER_USER;
+      expect(await verifyBearer(req, token)).toBeUndefined();
+    });
+
+    it('rejects tokens signed with a different secret', async () => {
+      const token = accessToken();
+      process.env.OAUTH_SIGNING_SECRET = 't'.repeat(40);
+      expect(await verifyBearer(req, token)).toBeUndefined();
     });
   });
 
   describe('static key', () => {
-    it('accepts MCP_API_KEY when OAuth is not configured', async () => {
+    it('accepts MCP_API_KEY when OAuth is not configured and uses YNAB_API_TOKEN', async () => {
       process.env.MCP_API_KEY = 'k'.repeat(40);
+      process.env.YNAB_API_TOKEN = 'pat';
       const info = await verifyBearer(req, 'k'.repeat(40));
       expect(info?.clientId).toBe('ynab-mcp-server');
+      expect(info?.extra?.ynabToken).toBe('pat');
       expect(await verifyBearer(req, 'wrong')).toBeUndefined();
     });
 

@@ -2,6 +2,7 @@ import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import * as ynab from "ynab";
 
 import { verifyBearer } from "../../lib/verify-bearer";
+import { ynabTokenContext } from "../../src/tools/apiUtils.js";
 
 import * as ApproveTransactionTool from "../../src/tools/ApproveTransactionTool.js";
 import * as BudgetSummaryTool from "../../src/tools/BudgetSummaryTool.js";
@@ -112,14 +113,6 @@ const exposedTools = writesAllowed
 
 const handler = createMcpHandler(
   (server) => {
-    const ynabToken = process.env.YNAB_API_TOKEN;
-    if (!ynabToken) {
-      throw new Error(
-        "YNAB_API_TOKEN env var is required. Set it in the Vercel project settings.",
-      );
-    }
-    const api = new ynab.API(ynabToken);
-
     for (const tool of exposedTools) {
       server.registerTool(
         tool.name,
@@ -129,10 +122,23 @@ const handler = createMcpHandler(
           inputSchema: tool.inputSchema as any,
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async (input: any) =>
-          (await tool.execute(input, api)) as {
-            content: Array<{ type: "text"; text: string }>;
-          },
+        async (input: any, extra: any) => {
+          // The token comes from whoever authenticated this request: the
+          // signed-in YNAB user for OAuth, or YNAB_API_TOKEN for MCP_API_KEY.
+          const ynabToken = extra?.authInfo?.extra?.ynabToken;
+          if (typeof ynabToken !== "string" || !ynabToken) {
+            return {
+              content: [{ type: "text" as const, text: "No YNAB token for this request. Sign in again, or set YNAB_API_TOKEN for MCP_API_KEY clients." }],
+              isError: true,
+            };
+          }
+          const api = new ynab.API(ynabToken);
+          return ynabTokenContext.run(ynabToken, async () =>
+            (await tool.execute(input, api)) as {
+              content: Array<{ type: "text"; text: string }>;
+            },
+          );
+        },
       );
     }
   },
