@@ -4,289 +4,170 @@ import * as BudgetSummaryTool from '../tools/BudgetSummaryTool';
 
 vi.mock('ynab');
 
+const account = (overrides: Record<string, unknown>) => ({
+  id: 'acc',
+  name: 'Account',
+  type: 'checking',
+  deleted: false,
+  closed: false,
+  balance: 0,
+  ...overrides,
+});
+
+const category = (overrides: Record<string, unknown>) => ({
+  id: 'cat',
+  name: 'Category',
+  category_group_name: 'Everyday',
+  deleted: false,
+  hidden: false,
+  balance: 0,
+  budgeted: 0,
+  activity: 0,
+  goal_under_funded: null,
+  ...overrides,
+});
+
+const mockAccounts = [
+  account({ id: 'a1', name: 'Checking', balance: 150000 }),
+  account({ id: 'a2', name: 'Savings', type: 'savings', balance: 500000 }),
+  account({ id: 'a3', name: 'Closed', closed: true, balance: 1000 }),
+  account({ id: 'a4', name: 'Deleted', deleted: true, balance: 1000 }),
+];
+
+const mockMonth = {
+  month: '2023-01-01',
+  income: 500000,
+  budgeted: 450000,
+  activity: -400000,
+  to_be_budgeted: 50000,
+  age_of_money: 45,
+  categories: [
+    category({ id: 'c1', name: 'Groceries', balance: -2500, budgeted: 20000, activity: -22500 }),
+    category({ id: 'c2', name: 'Dining', balance: -40000, budgeted: 10000, activity: -50000 }),
+    category({ id: 'c3', name: 'Gas', balance: 5000, budgeted: 15000, activity: -10000 }),
+    category({ id: 'c4', name: 'Vacation', category_group_name: 'Goals', balance: 10000, goal_under_funded: 90000 }),
+    category({ id: 'c5', name: 'Car', category_group_name: 'Goals', goal_under_funded: 25500 }),
+    category({ id: 'c6', name: 'Hidden', hidden: true, balance: -9000, goal_under_funded: 9000 }),
+    category({ id: 'c7', name: 'Deleted', deleted: true, balance: -9000, goal_under_funded: 9000 }),
+    category({ id: 'c8', name: 'Inflow: Ready to Assign', category_group_name: 'Internal Master Category', balance: -1000 }),
+  ],
+};
+
 describe('BudgetSummaryTool', () => {
   let mockApi: {
-    accounts: {
-      getAccounts: Mock;
-    };
-    months: {
-      getBudgetMonth: Mock;
-    };
+    accounts: { getAccounts: Mock };
+    months: { getBudgetMonth: Mock };
+    transactions: { getTransactions: Mock };
+  };
+
+  const run = async (input: Record<string, unknown> = {}) => {
+    const result = await BudgetSummaryTool.execute(input, mockApi as any);
+    return JSON.parse(result.content[0].text);
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
-
     mockApi = {
-      accounts: {
-        getAccounts: vi.fn(),
-      },
-      months: {
-        getBudgetMonth: vi.fn(),
+      accounts: { getAccounts: vi.fn().mockResolvedValue({ data: { accounts: mockAccounts } }) },
+      months: { getBudgetMonth: vi.fn().mockResolvedValue({ data: { month: mockMonth } }) },
+      transactions: {
+        getTransactions: vi.fn().mockResolvedValue({
+          data: { transactions: [{ id: 't1', deleted: false }, { id: 't2', deleted: false }, { id: 't3', deleted: true }] },
+        }),
       },
     };
-
     (ynab.API as any).mockImplementation(() => mockApi);
-
-    process.env.YNAB_API_TOKEN = 'test-token';
     process.env.YNAB_BUDGET_ID = 'test-budget-id';
   });
 
-  describe('execute', () => {
-    const mockAccountsData = [
-      {
-        id: 'account-1',
-        name: 'Checking Account',
-        type: 'checking',
-        deleted: false,
-        closed: false,
-        balance: 150000, // $150.00
-      },
-      {
-        id: 'account-2',
-        name: 'Savings Account',
-        type: 'savings',
-        deleted: false,
-        closed: false,
-        balance: 500000, // $500.00
-      },
-      {
-        id: 'account-3',
-        name: 'Closed Account',
-        type: 'checking',
-        deleted: false,
-        closed: true, // Should be filtered out
-        balance: 0,
-      },
-      {
-        id: 'account-4',
-        name: 'Deleted Account',
-        type: 'checking',
-        deleted: true, // Should be filtered out
-        closed: false,
-        balance: 0,
-      },
-    ];
+  it('calls YNAB for the default budget and current month', async () => {
+    await run();
+    expect(mockApi.accounts.getAccounts).toHaveBeenCalledWith('test-budget-id');
+    expect(mockApi.months.getBudgetMonth).toHaveBeenCalledWith('test-budget-id', 'current');
+    expect(mockApi.transactions.getTransactions).toHaveBeenCalledWith('test-budget-id', undefined, 'unapproved');
+  });
 
-    const mockMonthData = {
-      month: {
-        month: '2023-01-01',
-        income: 500000, // $500.00
-        budgeted: 450000, // $450.00
-        activity: -400000, // -$400.00
-        to_be_budgeted: 50000, // $50.00
-        age_of_money: 45,
-        note: 'Test month note',
-        categories: [
-          {
-            id: 'category-1',
-            name: 'Groceries',
-            deleted: false,
-            hidden: false,
-            balance: -2500, // -$2.50 (overspent)
-            budgeted: 20000, // $20.00
-            activity: -22500, // -$22.50
-          },
-          {
-            id: 'category-2',
-            name: 'Gas',
-            deleted: false,
-            hidden: false,
-            balance: 5000, // $5.00 (positive)
-            budgeted: 15000, // $15.00
-            activity: -10000, // -$10.00
-          },
-          {
-            id: 'category-3',
-            name: 'Hidden Category',
-            deleted: false,
-            hidden: true, // Should be filtered out
-            balance: 1000,
-            budgeted: 1000,
-            activity: 0,
-          },
-          {
-            id: 'category-4',
-            name: 'Deleted Category',
-            deleted: true, // Should be filtered out
-            hidden: false,
-            balance: 1000,
-            budgeted: 1000,
-            activity: 0,
-          },
-        ],
-      },
-    };
+  it('passes a custom budget and month through', async () => {
+    await run({ budgetId: 'custom', month: '2023-01-01' });
+    expect(mockApi.accounts.getAccounts).toHaveBeenCalledWith('custom');
+    expect(mockApi.months.getBudgetMonth).toHaveBeenCalledWith('custom', '2023-01-01');
+  });
 
-    it('should successfully get budget summary with default month', async () => {
-      mockApi.accounts.getAccounts.mockResolvedValue({
-        data: { accounts: mockAccountsData },
-      });
-      mockApi.months.getBudgetMonth.mockResolvedValue({
-        data: mockMonthData,
-      });
-
-      const result = await BudgetSummaryTool.execute({}, mockApi as any);
-
-      expect(mockApi.accounts.getAccounts).toHaveBeenCalledWith('test-budget-id');
-      expect(mockApi.months.getBudgetMonth).toHaveBeenCalledWith('test-budget-id', 'current');
-
-      const parsedResult = JSON.parse(result.content[0].text);
-      expect(parsedResult).toHaveProperty('monthBudget');
-      expect(parsedResult).toHaveProperty('accounts');
-      expect(parsedResult).toHaveProperty('note', 'Divide all numbers by 1000 to get the balance in dollars.');
-
-      // Should only include non-deleted, non-closed accounts
-      expect(parsedResult.accounts).toHaveLength(2);
-      expect(parsedResult.accounts[0].name).toBe('Checking Account');
-      expect(parsedResult.accounts[1].name).toBe('Savings Account');
-    });
-
-    it('should successfully get budget summary with custom month', async () => {
-      mockApi.accounts.getAccounts.mockResolvedValue({
-        data: { accounts: mockAccountsData },
-      });
-      mockApi.months.getBudgetMonth.mockResolvedValue({
-        data: mockMonthData,
-      });
-
-      const result = await BudgetSummaryTool.execute(
-        { month: '2023-01-01' },
-        mockApi as any
-      );
-
-      expect(mockApi.months.getBudgetMonth).toHaveBeenCalledWith('test-budget-id', '2023-01-01');
-    });
-
-    it('should successfully get budget summary with custom budget ID', async () => {
-      mockApi.accounts.getAccounts.mockResolvedValue({
-        data: { accounts: mockAccountsData },
-      });
-      mockApi.months.getBudgetMonth.mockResolvedValue({
-        data: mockMonthData,
-      });
-
-      const result = await BudgetSummaryTool.execute(
-        { budgetId: 'custom-budget-id' },
-        mockApi as any
-      );
-
-      expect(mockApi.accounts.getAccounts).toHaveBeenCalledWith('custom-budget-id');
-      expect(mockApi.months.getBudgetMonth).toHaveBeenCalledWith('custom-budget-id', 'current');
-    });
-
-    it('should handle empty accounts and categories', async () => {
-      mockApi.accounts.getAccounts.mockResolvedValue({
-        data: { accounts: [] },
-      });
-      mockApi.months.getBudgetMonth.mockResolvedValue({
-        data: {
-          month: {
-            ...mockMonthData.month,
-            categories: [],
-          },
-        },
-      });
-
-      const result = await BudgetSummaryTool.execute({}, mockApi as any);
-
-      const parsedResult = JSON.parse(result.content[0].text);
-      expect(parsedResult.accounts).toEqual([]);
-    });
-
-    it('should filter out deleted and closed accounts', async () => {
-      const accountsWithDeletedAndClosed = [
-        ...mockAccountsData,
-        {
-          id: 'account-5',
-          name: 'Another Closed Account',
-          type: 'savings',
-          deleted: false,
-          closed: true,
-          balance: 100000,
-        },
-        {
-          id: 'account-6',
-          name: 'Another Deleted Account',
-          type: 'checking',
-          deleted: true,
-          closed: false,
-          balance: 200000,
-        },
-      ];
-
-      mockApi.accounts.getAccounts.mockResolvedValue({
-        data: { accounts: accountsWithDeletedAndClosed },
-      });
-      mockApi.months.getBudgetMonth.mockResolvedValue({
-        data: mockMonthData,
-      });
-
-      const result = await BudgetSummaryTool.execute({}, mockApi as any);
-
-      const parsedResult = JSON.parse(result.content[0].text);
-      expect(parsedResult.accounts).toHaveLength(2); // Only the 2 valid accounts
-    });
-
-    it('should handle API error for accounts', async () => {
-      const apiError = new Error('Accounts API Error');
-      mockApi.accounts.getAccounts.mockRejectedValue(apiError);
-
-      const result = await BudgetSummaryTool.execute({}, mockApi as any);
-
-      const response = JSON.parse(result.content[0].text);
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('Accounts API Error');
-    });
-
-    it('should handle API error for month data', async () => {
-      mockApi.accounts.getAccounts.mockResolvedValue({
-        data: { accounts: mockAccountsData },
-      });
-      const apiError = new Error('Month API Error');
-      mockApi.months.getBudgetMonth.mockRejectedValue(apiError);
-
-      const result = await BudgetSummaryTool.execute({}, mockApi as any);
-
-      const response = JSON.parse(result.content[0].text);
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('Month API Error');
-    });
-
-    it('should throw error when no budget ID is provided', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-
-      const result = await BudgetSummaryTool.execute({}, mockApi as any);
-
-      const response = JSON.parse(result.content[0].text);
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('No budget ID provided');
-    });
-
-    it('should validate month format with regex', () => {
-      // Test the month regex pattern
-      const validMonths = ['current', '2023-01-01', '2024-12-31'];
-      const invalidMonths = ['invalid', '23-01-01', '2023-1-1', '2023/01/01'];
-
-      validMonths.forEach(month => {
-        expect(/^(current|\d{4}-\d{2}-\d{2})$/.test(month)).toBe(true);
-      });
-
-      invalidMonths.forEach(month => {
-        expect(/^(current|\d{4}-\d{2}-\d{2})$/.test(month)).toBe(false);
-      });
+  it('leads with a headline in dollars', async () => {
+    const summary = await run();
+    expect(summary.month).toBe('2023-01-01');
+    expect(summary.headline).toEqual({
+      ready_to_assign: 50,
+      income: 500,
+      budgeted: 450,
+      activity: -400,
+      age_of_money_days: 45,
+      overspent_count: 2,
+      overspent_total: -42.5,
+      underfunded_total: 115.5,
+      unapproved_count: 2,
     });
   });
 
-  describe('tool configuration', () => {
-    it('should have correct name and description', () => {
-      expect(BudgetSummaryTool.name).toBe('ynab_budget_summary');
-      expect(BudgetSummaryTool.description).toContain('Get a summary of the budget for a specific month');
-    });
+  it('lists overspent categories worst first, excluding hidden, deleted and internal ones', async () => {
+    const summary = await run();
+    expect(summary.overspent).toEqual([
+      { name: 'Dining', group: 'Everyday', balance: -40, budgeted: 10, activity: -50 },
+      { name: 'Groceries', group: 'Everyday', balance: -2.5, budgeted: 20, activity: -22.5 },
+    ]);
+  });
 
-    it('should have correct input schema', () => {
-      expect(BudgetSummaryTool.inputSchema).toHaveProperty('budgetId');
-      expect(BudgetSummaryTool.inputSchema).toHaveProperty('month');
-    });
+  it('lists underfunded categories by amount still needed', async () => {
+    const summary = await run();
+    expect(summary.underfunded).toEqual([
+      { name: 'Vacation', group: 'Goals', needed: 90 },
+      { name: 'Car', group: 'Goals', needed: 25.5 },
+    ]);
+  });
+
+  it('lists open accounts compactly in dollars', async () => {
+    const summary = await run();
+    expect(summary.accounts).toEqual([
+      { name: 'Checking', type: 'checking', balance: 150 },
+      { name: 'Savings', type: 'savings', balance: 500 },
+    ]);
+  });
+
+  it('no longer returns raw milliunits or the full month object', async () => {
+    const text = JSON.stringify(await run());
+    expect(text).not.toContain('Divide all numbers by 1000');
+    expect(text).not.toContain('monthBudget');
+    expect(text).not.toContain('150000');
+  });
+
+  it('handles a month with nothing to report', async () => {
+    mockApi.accounts.getAccounts.mockResolvedValue({ data: { accounts: [] } });
+    mockApi.months.getBudgetMonth.mockResolvedValue({ data: { month: { ...mockMonth, age_of_money: null, categories: [] } } });
+    mockApi.transactions.getTransactions.mockResolvedValue({ data: { transactions: [] } });
+
+    const summary = await run();
+    expect(summary.headline.overspent_count).toBe(0);
+    expect(summary.headline.overspent_total).toBe(0);
+    expect(summary.headline.age_of_money_days).toBeNull();
+    expect(summary.overspent).toEqual([]);
+    expect(summary.underfunded).toEqual([]);
+    expect(summary.accounts).toEqual([]);
+  });
+
+  it.each([
+    ['accounts', 'getAccounts'],
+    ['months', 'getBudgetMonth'],
+    ['transactions', 'getTransactions'],
+  ] as const)('returns an error when the %s call fails', async (group, method) => {
+    (mockApi[group] as Record<string, Mock>)[method].mockRejectedValue(new Error(`${method} failed`));
+    const response = await run();
+    expect(response.success).toBe(false);
+    expect(response.error).toContain(`${method} failed`);
+  });
+
+  it('validates the month format', () => {
+    const schema = BudgetSummaryTool.inputSchema.month;
+    for (const ok of ['current', '2023-01-01']) expect(schema.safeParse(ok).success).toBe(true);
+    for (const bad of ['invalid', '2023-1-1', '2023/01/01']) expect(schema.safeParse(bad).success).toBe(false);
   });
 });

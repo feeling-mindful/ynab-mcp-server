@@ -2,18 +2,19 @@ import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
 import { getBudgetId } from "./budgetUtils.js";
+import { resolveId } from "./resolveUtils.js";
 
 export const name = "ynab_update_transaction";
 export const description = "Updates an existing transaction. All fields except transactionId are optional - only provide fields you want to change.";
 export const inputSchema = {
   budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
   transactionId: z.string().describe("The ID of the transaction to update"),
-  accountId: z.string().optional().describe("Move transaction to a different account"),
+  accountId: z.string().optional().describe("Move transaction to a different account: its ID or its name"),
   date: z.string().optional().describe("The date of the transaction in ISO format (e.g. 2024-03-24)"),
   amount: z.number().optional().describe("The amount in dollars (e.g. -10.99 for outflow, 10.99 for inflow)"),
-  payeeId: z.string().optional().describe("The ID of the payee"),
+  payeeId: z.string().optional().describe("An existing payee: its ID or its name (use payeeName to create a new payee)"),
   payeeName: z.string().optional().describe("The name of the payee (creates new payee if doesn't exist)"),
-  categoryId: z.string().optional().describe("The category ID for the transaction"),
+  categoryId: z.string().optional().describe("The category for the transaction: its ID or its name"),
   memo: z.string().optional().describe("A memo/note for the transaction"),
   cleared: z.enum(["cleared", "uncleared", "reconciled"]).optional().describe("The cleared status"),
   approved: z.boolean().optional().describe("Whether the transaction is approved"),
@@ -46,9 +47,15 @@ function mapClearedStatus(cleared: string): ynab.TransactionClearedStatus {
   }
 }
 
-export async function execute(input: UpdateTransactionInput, api: ynab.API) {
+export async function execute(rawInput: UpdateTransactionInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = getBudgetId(rawInput.budgetId);
+    const input: UpdateTransactionInput = {
+      ...rawInput,
+      accountId: await resolveId(api, budgetId, "account", rawInput.accountId),
+      payeeId: await resolveId(api, budgetId, "payee", rawInput.payeeId),
+      categoryId: await resolveId(api, budgetId, "category", rawInput.categoryId),
+    };
 
     // Build the update object with only provided fields
     const transactionUpdate: ynab.SaveTransactionWithOptionalFields = {};

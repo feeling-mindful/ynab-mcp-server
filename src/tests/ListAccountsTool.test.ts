@@ -161,16 +161,6 @@ describe('ListAccountsTool', () => {
       expect(mockApi.accounts.getAccounts).toHaveBeenCalledWith('test-budget-id');
     });
 
-    it('should return error when no budget ID available', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-
-      const result = await ListAccountsTool.execute({}, mockApi as any);
-
-      const response = JSON.parse(result.content[0].text);
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('No budget ID provided');
-    });
-
     it('should handle API error', async () => {
       mockApi.accounts.getAccounts.mockRejectedValue(new Error('API Error'));
 

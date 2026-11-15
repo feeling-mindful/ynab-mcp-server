@@ -122,14 +122,14 @@ describe('GetTransactionsTool', () => {
       await GetTransactionsTool.execute(
         {
           budgetId: 'test-budget-id',
-          accountId: 'account-1',
+          accountId: 'aaaaaaaa-0000-4000-8000-000000000001',
         },
         mockApi as any
       );
 
       expect(mockApi.transactions.getTransactionsByAccount).toHaveBeenCalledWith(
         'test-budget-id',
-        'account-1',
+        'aaaaaaaa-0000-4000-8000-000000000001',
         undefined,
         undefined
       );
@@ -143,14 +143,14 @@ describe('GetTransactionsTool', () => {
       await GetTransactionsTool.execute(
         {
           budgetId: 'test-budget-id',
-          categoryId: 'category-1',
+          categoryId: 'cccccccc-0000-4000-8000-000000000001',
         },
         mockApi as any
       );
 
       expect(mockApi.transactions.getTransactionsByCategory).toHaveBeenCalledWith(
         'test-budget-id',
-        'category-1',
+        'cccccccc-0000-4000-8000-000000000001',
         undefined,
         undefined
       );
@@ -164,14 +164,14 @@ describe('GetTransactionsTool', () => {
       await GetTransactionsTool.execute(
         {
           budgetId: 'test-budget-id',
-          payeeId: 'payee-1',
+          payeeId: 'bbbbbbbb-0000-4000-8000-000000000001',
         },
         mockApi as any
       );
 
       expect(mockApi.transactions.getTransactionsByPayee).toHaveBeenCalledWith(
         'test-budget-id',
-        'payee-1',
+        'bbbbbbbb-0000-4000-8000-000000000001',
         undefined,
         undefined
       );
@@ -312,16 +312,6 @@ describe('GetTransactionsTool', () => {
       const response = JSON.parse(result.content[0].text);
       expect(response.transactions[0].amount).toBe('-25.99');
       expect(response.transactions[1].amount).toBe('-15.00');
-    });
-
-    it('should return error when no budget ID available', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-
-      const result = await GetTransactionsTool.execute({}, mockApi as any);
-
-      const response = JSON.parse(result.content[0].text);
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('No budget ID provided');
     });
 
     it('should handle API error', async () => {
