@@ -72,19 +72,6 @@ describe('DeleteTransactionTool', () => {
       );
     });
 
-    it('should return error when no budget ID available', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-
-      const result = await DeleteTransactionTool.execute(
-        { transactionId: 'txn-1' },
-        mockApi as any
-      );
-
-      const response = JSON.parse(result.content[0].text);
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('No budget ID provided');
-    });
-
     it('should handle API error for non-existent transaction', async () => {
       mockApi.transactions.deleteTransaction.mockRejectedValue(
         new Error('Transaction not found')

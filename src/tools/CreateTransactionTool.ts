@@ -2,17 +2,18 @@ import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
 import { getBudgetId } from "./budgetUtils.js";
+import { resolveId } from "./resolveUtils.js";
 
 export const name = "ynab_create_transaction";
 export const description = "Creates a new transaction in your YNAB budget. Either payeeId or payeeName must be provided in addition to the other required fields.";
 export const inputSchema = {
   budgetId: z.string().optional().describe("The id of the budget to create the transaction in (optional, defaults to the budget set in the YNAB_BUDGET_ID environment variable)"),
-  accountId: z.string().describe("The id of the account to create the transaction in"),
+  accountId: z.string().describe("The account to create the transaction in: its ID or its exact name (e.g. \"Ally Checking\")"),
   date: z.string().describe("The date of the transaction in ISO format (e.g. 2024-03-24)"),
   amount: z.number().describe("The amount in dollars (e.g. 10.99)"),
   payeeId: z.string().optional().describe("The id of the payee (optional if payeeName is provided)"),
   payeeName: z.string().optional().describe("The name of the payee (optional if payeeId is provided)"),
-  categoryId: z.string().optional().describe("The category id for the transaction (optional)"),
+  categoryId: z.string().optional().describe("The category for the transaction: its ID or its name (optional)"),
   memo: z.string().optional().describe("A memo/note for the transaction (optional)"),
   cleared: z.boolean().optional().describe("Whether the transaction is cleared (optional, defaults to false)"),
   approved: z.boolean().optional().describe("Whether the transaction is approved (optional, defaults to false)"),
@@ -33,9 +34,14 @@ interface CreateTransactionInput {
   flagColor?: string;
 }
 
-export async function execute(input: CreateTransactionInput, api: ynab.API) {
+export async function execute(rawInput: CreateTransactionInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = getBudgetId(rawInput.budgetId);
+    const input: CreateTransactionInput = {
+      ...rawInput,
+      accountId: (await resolveId(api, budgetId, "account", rawInput.accountId)) ?? rawInput.accountId,
+      categoryId: await resolveId(api, budgetId, "category", rawInput.categoryId),
+    };
 
     if(!input.payeeId && !input.payeeName) {
       throw new Error("Either payeeId or payeeName must be provided");

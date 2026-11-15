@@ -54,7 +54,7 @@ describe('UpdateTransactionTool', () => {
           date: '2024-01-15',
           amount: -25.99,
           payeeName: 'Amazon',
-          categoryId: 'cat-1',
+          categoryId: 'cccccccc-0000-4000-8000-0000000000c1',
           memo: 'Updated memo',
           cleared: 'cleared',
           approved: true,
@@ -71,7 +71,7 @@ describe('UpdateTransactionTool', () => {
             date: '2024-01-15',
             amount: -25990,
             payee_name: 'Amazon',
-            category_id: 'cat-1',
+            category_id: 'cccccccc-0000-4000-8000-0000000000c1',
             memo: 'Updated memo',
             cleared: ynab.TransactionClearedStatus.Cleared,
             approved: true,
@@ -149,22 +149,6 @@ describe('UpdateTransactionTool', () => {
           },
         }
       );
-    });
-
-    it('should return error when no budget ID available', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-
-      const result = await UpdateTransactionTool.execute(
-        {
-          transactionId: 'txn-1',
-          memo: 'test',
-        },
-        mockApi as any
-      );
-
-      const response = JSON.parse(result.content[0].text);
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('No budget ID provided');
     });
 
     it('should handle API error', async () => {

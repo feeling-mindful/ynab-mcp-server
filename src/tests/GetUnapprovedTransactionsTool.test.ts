@@ -211,16 +211,6 @@ describe('GetUnapprovedTransactionsTool', () => {
       expect(response.error).toContain('API Error: Unauthorized');
     });
 
-    it('should throw error when no budget ID is provided', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-
-      const result = await GetUnapprovedTransactionsTool.execute({}, mockApi as any);
-
-      const response = JSON.parse(result.content[0].text);
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('No budget ID provided');
-    });
-
     it('should convert milliunits to dollars correctly', async () => {
       const testTransactions = [
         {

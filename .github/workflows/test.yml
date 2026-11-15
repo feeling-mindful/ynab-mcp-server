@@ -3,6 +3,7 @@ name: Test
 on:
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -34,3 +35,13 @@ jobs:
       with:
         file: ./coverage/coverage-final.json
         fail_ci_if_error: false
+
+  # The single status check main's branch protection requires. It passes only
+  # when every matrix job passed, so the required check never names a Node version.
+  ci:
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()
+    steps:
+    - name: Require all test jobs to pass
+      run: test "${{ needs.test.result }}" = "success"

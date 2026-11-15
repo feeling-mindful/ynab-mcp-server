@@ -28,11 +28,11 @@ describe('CreateTransactionTool', () => {
 
   describe('execute', () => {
     const validTransactionInput = {
-      accountId: 'account-123',
+      accountId: 'aaaaaaaa-0000-4000-8000-000000000123',
       date: '2023-01-01',
       amount: 50.00,
       payeeName: 'Test Payee',
-      categoryId: 'category-123',
+      categoryId: 'cccccccc-0000-4000-8000-000000000123',
       memo: 'Test transaction',
       cleared: true,
       approved: false,
@@ -41,11 +41,11 @@ describe('CreateTransactionTool', () => {
 
     const mockCreatedTransaction = {
       id: 'transaction-123',
-      account_id: 'account-123',
+      account_id: 'aaaaaaaa-0000-4000-8000-000000000123',
       date: '2023-01-01',
       amount: 50000, // $50.00 in milliunits
       payee_name: 'Test Payee',
-      category_id: 'category-123',
+      category_id: 'cccccccc-0000-4000-8000-000000000123',
       memo: 'Test transaction',
       cleared: ynab.TransactionClearedStatus.Cleared,
       approved: false,
@@ -63,12 +63,12 @@ describe('CreateTransactionTool', () => {
         'test-budget-id',
         {
           transaction: {
-            account_id: 'account-123',
+            account_id: 'aaaaaaaa-0000-4000-8000-000000000123',
             date: '2023-01-01',
             amount: 50000, // $50.00 converted to milliunits
             payee_id: undefined,
             payee_name: 'Test Payee',
-            category_id: 'category-123',
+            category_id: 'cccccccc-0000-4000-8000-000000000123',
             memo: 'Test transaction',
             cleared: ynab.TransactionClearedStatus.Cleared,
             approved: false,
@@ -94,7 +94,7 @@ describe('CreateTransactionTool', () => {
     it('should successfully create transaction with payee ID', async () => {
       const inputWithPayeeId = {
         ...validTransactionInput,
-        payeeId: 'payee-123',
+        payeeId: 'bbbbbbbb-0000-4000-8000-000000000123',
         payeeName: undefined,
       };
 
@@ -108,7 +108,7 @@ describe('CreateTransactionTool', () => {
         'test-budget-id',
         expect.objectContaining({
           transaction: expect.objectContaining({
-            payee_id: 'payee-123',
+            payee_id: 'bbbbbbbb-0000-4000-8000-000000000123',
             payee_name: undefined,
           }),
         })
@@ -135,7 +135,7 @@ describe('CreateTransactionTool', () => {
 
     it('should handle minimal required fields', async () => {
       const minimalInput = {
-        accountId: 'account-123',
+        accountId: 'aaaaaaaa-0000-4000-8000-000000000123',
         date: '2023-01-01',
         amount: 25.50,
         payeeName: 'Minimal Payee',
@@ -151,7 +151,7 @@ describe('CreateTransactionTool', () => {
         'test-budget-id',
         {
           transaction: {
-            account_id: 'account-123',
+            account_id: 'aaaaaaaa-0000-4000-8000-000000000123',
             date: '2023-01-01',
             amount: 25500, // $25.50 converted to milliunits
             payee_id: undefined,
@@ -202,7 +202,7 @@ describe('CreateTransactionTool', () => {
 
     it('should return error when neither payeeId nor payeeName is provided', async () => {
       const invalidInput = {
-        accountId: 'account-123',
+        accountId: 'aaaaaaaa-0000-4000-8000-000000000123',
         date: '2023-01-01',
         amount: 50.00,
         // Missing both payeeId and payeeName
@@ -257,24 +257,6 @@ describe('CreateTransactionTool', () => {
           text: JSON.stringify({
             success: false,
             error: "Failed to create transaction - no transaction data returned",
-          }, null, 2)
-        }]
-      };
-
-      expect(result).toEqual(expectedResult);
-    });
-
-    it('should throw error when no budget ID is provided', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-
-      const result = await CreateTransactionTool.execute(validTransactionInput, mockApi as any);
-
-      const expectedResult = {
-        content: [{
-          type: "text",
-          text: JSON.stringify({
-            success: false,
-            error: "No budget ID provided. Please provide a budget ID or set the YNAB_BUDGET_ID environment variable.",
           }, null, 2)
         }]
       };

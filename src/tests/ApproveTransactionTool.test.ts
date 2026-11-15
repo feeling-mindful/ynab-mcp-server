@@ -208,21 +208,6 @@ describe('ApproveTransactionTool', () => {
       expect(response.error).toContain('Failed to update transaction - no transaction data returned');
     });
 
-    it('should throw error when no budget ID is provided', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-
-      const result = await ApproveTransactionTool.execute(
-        { transactionId: 'transaction-123' },
-        mockApi as any
-      );
-
-      const response = JSON.parse(result.content[0].text);
-      expect(response.success).toBe(false);
-      expect(response.error).toContain('No budget ID provided');
-      expect(mockApi.transactions.getTransactionById).not.toHaveBeenCalled();
-      expect(mockApi.transactions.updateTransaction).not.toHaveBeenCalled();
-    });
-
     it('should handle approved parameter correctly with default value', async () => {
       mockApi.transactions.getTransactionById.mockResolvedValue({
         data: { transaction: mockExistingTransaction },

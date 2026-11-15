@@ -2,6 +2,7 @@ import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
 import { getBudgetId } from "./budgetUtils.js";
+import { resolveId } from "./resolveUtils.js";
 
 export const name = "ynab_get_transactions";
 export const description = "Gets transactions from a budget with optional filters. Can filter by date range, account, category, payee, month, or approval status.";
@@ -10,9 +11,9 @@ export const inputSchema = {
   transactionId: z.string().optional().describe("Get a single transaction by ID (overrides all other filters)"),
   sinceDate: z.string().optional().describe("Only return transactions on or after this date (ISO format: 2024-01-01)"),
   type: z.enum(["all", "uncategorized", "unapproved"]).optional().describe("Filter by transaction type. Defaults to 'all'."),
-  accountId: z.string().optional().describe("Filter to only transactions in this account"),
-  categoryId: z.string().optional().describe("Filter to only transactions in this category"),
-  payeeId: z.string().optional().describe("Filter to only transactions with this payee"),
+  accountId: z.string().optional().describe("Filter to only transactions in this account: its ID or its name"),
+  categoryId: z.string().optional().describe("Filter to only transactions in this category: its ID or its name"),
+  payeeId: z.string().optional().describe("Filter to only transactions with this payee: its ID or its name"),
   month: z.string().optional().describe("Filter to transactions in this month (ISO format: 2024-01-01)"),
   limit: z.number().optional().describe("Maximum number of transactions to return (default: 100)"),
 };
@@ -55,9 +56,15 @@ interface TransactionData {
   deleted: boolean;
 }
 
-export async function execute(input: GetTransactionsInput, api: ynab.API) {
+export async function execute(rawInput: GetTransactionsInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = getBudgetId(rawInput.budgetId);
+    const input: GetTransactionsInput = {
+      ...rawInput,
+      accountId: await resolveId(api, budgetId, "account", rawInput.accountId),
+      categoryId: await resolveId(api, budgetId, "category", rawInput.categoryId),
+      payeeId: await resolveId(api, budgetId, "payee", rawInput.payeeId),
+    };
     const limit = input.limit || 100;
 
     let rawTransactions: TransactionData[];
