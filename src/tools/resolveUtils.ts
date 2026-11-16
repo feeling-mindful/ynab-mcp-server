@@ -90,9 +90,34 @@ async function listAccounts(api: ynab.API, budgetId: string): Promise<Named[]> {
   return response.data.accounts.filter((a) => !a.deleted && !a.closed);
 }
 
-async function listCategories(api: ynab.API, budgetId: string): Promise<Named[]> {
-  const response = await api.categories.getCategories(budgetId);
-  return response.data.category_groups
+/**
+ * One request's view of the budget's category tree. Pass the same snapshot to
+ * every lookup in a tool call so two names (a category and a group) cost one
+ * download, not two. Never share one across requests: it would go stale.
+ */
+export type CategorySnapshot = Map<string, Promise<ynab.CategoryGroupWithCategories[]>>;
+
+export function createCategorySnapshot(): CategorySnapshot {
+  return new Map();
+}
+
+async function fetchCategoryGroups(
+  api: ynab.API,
+  budgetId: string,
+  snapshot?: CategorySnapshot,
+): Promise<ynab.CategoryGroupWithCategories[]> {
+  const load = async () => (await api.categories.getCategories(budgetId)).data.category_groups;
+  if (!snapshot) return load();
+  const cached = snapshot.get(budgetId);
+  if (cached) return cached;
+  const pending = load();
+  snapshot.set(budgetId, pending);
+  return pending;
+}
+
+async function listCategories(api: ynab.API, budgetId: string, snapshot?: CategorySnapshot): Promise<Named[]> {
+  const groups = await fetchCategoryGroups(api, budgetId, snapshot);
+  return groups
     .filter((g) => !g.deleted)
     .flatMap((g) => g.categories)
     .filter((c) => !c.deleted);
@@ -103,17 +128,17 @@ async function listCategories(api: ynab.API, budgetId: string): Promise<Named[]>
  * YNAB manages itself (e.g. "Uncategorized", "Inflow: Ready to Assign"). The
  * plain "category" kind keeps those, because transactions legitimately use them.
  */
-async function listEditableCategories(api: ynab.API, budgetId: string): Promise<Named[]> {
-  const response = await api.categories.getCategories(budgetId);
-  return response.data.category_groups
+async function listEditableCategories(api: ynab.API, budgetId: string, snapshot?: CategorySnapshot): Promise<Named[]> {
+  const groups = await fetchCategoryGroups(api, budgetId, snapshot);
+  return groups
     .filter((g) => !g.deleted && !g.hidden && !INTERNAL_GROUPS.has(g.name))
     .flatMap((g) => g.categories)
     .filter((c) => !c.deleted && !c.hidden);
 }
 
-async function listCategoryGroups(api: ynab.API, budgetId: string): Promise<Named[]> {
-  const response = await api.categories.getCategories(budgetId);
-  return response.data.category_groups.filter((g) => !g.deleted && !g.hidden && !INTERNAL_GROUPS.has(g.name));
+async function listCategoryGroups(api: ynab.API, budgetId: string, snapshot?: CategorySnapshot): Promise<Named[]> {
+  const groups = await fetchCategoryGroups(api, budgetId, snapshot);
+  return groups.filter((g) => !g.deleted && !g.hidden && !INTERNAL_GROUPS.has(g.name));
 }
 
 /** Like resolveId, for a required reference: a missing or blank value throws instead of reaching YNAB. */
@@ -123,8 +148,9 @@ export async function requireId(
   kind: EntityKind,
   ref: string | undefined,
   field: string,
+  snapshot?: CategorySnapshot,
 ): Promise<string> {
-  const id = await resolveId(api, budgetId, kind, ref);
+  const id = await resolveId(api, budgetId, kind, ref, snapshot);
   if (!id) throw new Error(`${field} is required: pass the ${KIND_LABEL[kind].one}'s ID or name`);
   return id;
 }
@@ -134,7 +160,7 @@ async function listPayees(api: ynab.API, budgetId: string): Promise<Named[]> {
   return response.data.payees.filter((p) => !p.deleted);
 }
 
-const LISTERS: Record<EntityKind, (api: ynab.API, budgetId: string) => Promise<Named[]>> = {
+const LISTERS: Record<EntityKind, (api: ynab.API, budgetId: string, snapshot?: CategorySnapshot) => Promise<Named[]>> = {
   account: listAccounts,
   category: listCategories,
   editable_category: listEditableCategories,
@@ -142,16 +168,17 @@ const LISTERS: Record<EntityKind, (api: ynab.API, budgetId: string) => Promise<N
   payee: listPayees,
 };
 
-/** Resolves an ID-or-name to an ID. `undefined` in, `undefined` out. */
+/** Resolves an ID-or-name to an ID. `undefined` in, `undefined` out. `snapshot` lets several lookups share one category download. */
 export async function resolveId(
   api: ynab.API,
   budgetId: string,
   kind: EntityKind,
   ref: string | undefined,
+  snapshot?: CategorySnapshot,
 ): Promise<string | undefined> {
   if (ref === undefined) return undefined;
   const trimmed = ref.trim();
   if (!trimmed || isYnabId(trimmed)) return trimmed || undefined;
-  const items = await LISTERS[kind](api, budgetId);
+  const items = await LISTERS[kind](api, budgetId, snapshot);
   return matchByName(items, trimmed, kind).id;
 }

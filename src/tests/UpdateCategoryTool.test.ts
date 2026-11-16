@@ -95,6 +95,14 @@ describe('UpdateCategoryTool', () => {
     expect(mockYnabFetch).not.toHaveBeenCalled();
   });
 
+  it('downloads the category tree once when both the category and the group are names', async () => {
+    const parsed = await run({ categoryId: 'movies', categoryGroupId: 'bills' });
+
+    expect(parsed.success).toBe(true);
+    expect(mockApi.categories.getCategories).toHaveBeenCalledTimes(1);
+    expect(mockYnabFetch).toHaveBeenCalledWith(PATH, { method: 'PATCH', body: { category: { category_group_id: GROUP_ID } } });
+  });
+
   it('moves a category to another group by ID without looking anything up', async () => {
     const parsed = await run({ categoryId: CAT_ID, categoryGroupId: GROUP_ID });
 

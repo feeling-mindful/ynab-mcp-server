@@ -3,7 +3,7 @@ import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
 import { getBudgetId } from "./budgetUtils.js";
 import { ynabFetch } from "./apiUtils.js";
-import { requireId, resolveId } from "./resolveUtils.js";
+import { createCategorySnapshot, requireId, resolveId } from "./resolveUtils.js";
 
 export const name = "ynab_update_category";
 export const description = "Updates a category's properties (name, note, target) or moves it to another category group. For updating the budgeted amount, use ynab_update_category_budget instead.";
@@ -55,11 +55,13 @@ function buildPatch(input: UpdateCategoryInput, categoryGroupId: string | undefi
 export async function execute(input: UpdateCategoryInput, api: ynab.API) {
   try {
     const budgetId = getBudgetId(input.budgetId);
-    const categoryId = await requireId(api, budgetId, "editable_category", input.categoryId, "categoryId");
+    // Both lookups read the same category tree; share one download between them.
+    const snapshot = createCategorySnapshot();
+    const categoryId = await requireId(api, budgetId, "editable_category", input.categoryId, "categoryId", snapshot);
     if (input.categoryGroupId !== undefined && !input.categoryGroupId.trim()) {
       throw new Error("categoryGroupId is blank: pass the category group's ID or name, or leave it out");
     }
-    const categoryGroupId = await resolveId(api, budgetId, "category_group", input.categoryGroupId);
+    const categoryGroupId = await resolveId(api, budgetId, "category_group", input.categoryGroupId, snapshot);
 
     const patch = buildPatch(input, categoryGroupId);
     if (Object.keys(patch).length === 0) {
