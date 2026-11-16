@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, Mock } from 'vitest';
-import { isYnabId, matchByName, normalizeName, resolveId } from '../tools/resolveUtils';
+import { isYnabId, matchByName, normalizeName, requireId, resolveId } from '../tools/resolveUtils';
 
 describe('normalizeName', () => {
   it.each([
@@ -42,6 +42,14 @@ describe('matchByName', () => {
 
   it('points to the list tool when nothing is close', () => {
     expect(() => matchByName(items, 'Mortgage', 'category')).toThrow(/List the categories to find the right name or ID\./);
+  });
+
+  it('never loosely matches a name with no letters or digits', () => {
+    const emoji = [{ id: 'm', name: '💰' }, { id: 'b', name: 'Bills' }];
+    expect(matchByName(emoji, '💰', 'category_group').id).toBe('m');
+    for (const ref of ['-', '???', '🏠']) {
+      expect(() => matchByName(emoji, ref, 'category_group')).toThrow(/No category group named/);
+    }
   });
 
   it('caps suggestions at five', () => {
@@ -89,8 +97,13 @@ describe('resolveId', () => {
         getCategories: vi.fn().mockResolvedValue({
           data: {
             category_groups: [
-              { deleted: false, categories: [{ id: 'id-groceries', name: 'Groceries', deleted: false }] },
-              { deleted: true, categories: [{ id: 'id-dead-group', name: 'Dead Group Cat', deleted: false }] },
+              { id: 'id-food', name: 'Food', deleted: false, categories: [{ id: 'id-groceries', name: 'Groceries', deleted: false }] },
+              { id: 'id-dead', name: 'Dead Group', deleted: true, categories: [{ id: 'id-dead-group', name: 'Dead Group Cat', deleted: false }] },
+              { id: 'id-internal', name: 'Internal Master Category', deleted: false, categories: [] },
+              { id: 'id-hidden', name: 'Hidden Categories', deleted: false, categories: [] },
+              { id: 'id-old', name: 'Old', deleted: false, hidden: true, categories: [{ id: 'id-old-cat', name: 'Old Cat', deleted: false }] },
+              { id: 'id-old-twin', name: 'Twin', deleted: false, hidden: true, categories: [] },
+              { id: 'id-twin', name: 'Twin', deleted: false, hidden: false, categories: [{ id: 'id-secret', name: 'Secret', deleted: false, hidden: true }] },
             ],
           },
         }),
@@ -122,6 +135,7 @@ describe('resolveId', () => {
     ['account', 'Ally Checking', 'id-checking', 'accounts', 'getAccounts'],
     ['category', 'Groceries', 'id-groceries', 'categories', 'getCategories'],
     ['payee', 'REI', 'id-rei', 'payees', 'getPayees'],
+    ['category_group', 'food', 'id-food', 'categories', 'getCategories'],
   ] as const)('resolves an exact %s name to its ID', async (kind, ref, expected, group, method) => {
     expect(await resolveId(api as any, 'budget-1', kind, ref)).toBe(expected);
     expect((api[group] as Record<string, Mock>)[method]).toHaveBeenCalledWith('budget-1');
@@ -131,5 +145,38 @@ describe('resolveId', () => {
     await expect(resolveId(api as any, 'b', 'account', 'Old Checking')).rejects.toThrow();
     await expect(resolveId(api as any, 'b', 'account', 'Gone')).rejects.toThrow();
     await expect(resolveId(api as any, 'b', 'category', 'Dead Group Cat')).rejects.toThrow();
+  });
+
+  it("never matches deleted groups or YNAB's internal groups", async () => {
+    await expect(resolveId(api as any, 'b', 'category_group', 'Dead Group')).rejects.toThrow();
+    await expect(resolveId(api as any, 'b', 'category_group', 'Internal Master Category')).rejects.toThrow();
+    await expect(resolveId(api as any, 'b', 'category_group', 'Hidden Categories')).rejects.toThrow();
+  });
+
+  it('never matches a hidden group by name, and a hidden twin does not cause a tie', async () => {
+    await expect(resolveId(api as any, 'b', 'category_group', 'Old')).rejects.toThrow();
+    expect(await resolveId(api as any, 'b', 'category_group', 'Twin')).toBe('id-twin');
+  });
+
+  it('keeps hidden categories for transactions but not for editing', async () => {
+    expect(await resolveId(api as any, 'b', 'category', 'Secret')).toBe('id-secret');
+    expect(await resolveId(api as any, 'b', 'category', 'Old Cat')).toBe('id-old-cat');
+    await expect(resolveId(api as any, 'b', 'editable_category', 'Secret')).rejects.toThrow(/No category named/);
+    await expect(resolveId(api as any, 'b', 'editable_category', 'Old Cat')).rejects.toThrow(/No category named/);
+    expect(await resolveId(api as any, 'b', 'editable_category', 'groceries')).toBe('id-groceries');
+  });
+
+  it('requireId refuses a missing or blank reference', async () => {
+    await expect(requireId(api as any, 'b', 'category_group', '  ', 'categoryGroupId')).rejects.toThrow(
+      "categoryGroupId is required: pass the category group's ID or name",
+    );
+    await expect(requireId(api as any, 'b', 'category_group', undefined, 'categoryGroupId')).rejects.toThrow(/is required/);
+    expect(await requireId(api as any, 'b', 'category_group', 'food', 'categoryGroupId')).toBe('id-food');
+  });
+
+  it('names the kind readably in errors', async () => {
+    await expect(resolveId(api as any, 'b', 'category_group', 'Nope')).rejects.toThrow(
+      /No category group named "Nope"\. List the category groups to find the right name or ID\./,
+    );
   });
 });

@@ -11,7 +11,20 @@ export interface Named {
   name: string;
 }
 
-export type EntityKind = "account" | "category" | "payee";
+export type EntityKind = "account" | "category" | "editable_category" | "category_group" | "payee";
+
+const KIND_LABEL: Record<EntityKind, { one: string; many: string }> = {
+  account: { one: "account", many: "accounts" },
+  category: { one: "category", many: "categories" },
+  editable_category: { one: "category", many: "categories" },
+  category_group: { one: "category group", many: "category groups" },
+  payee: { one: "payee", many: "payees" },
+};
+
+// Groups YNAB manages itself, matched by their fixed names because the installed
+// SDK does not expose the API's `internal` flag. YNAB refuses any internal group
+// as a target, so a miss here fails safely at the API.
+const INTERNAL_GROUPS = new Set(["Internal Master Category", "Hidden Categories"]);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -32,22 +45,25 @@ export function isYnabId(ref: string): boolean {
  * agent may act unattended, so a near miss must ask, not guess.
  */
 export function matchByName<T extends Named>(items: readonly T[], ref: string, kind: EntityKind): T {
+  const label = KIND_LABEL[kind];
   const exact = items.filter((item) => item.name === ref);
   if (exact.length === 1) return exact[0];
 
   const target = normalizeName(ref);
-  const loose = items.filter((item) => normalizeName(item.name) === target);
+  // A name with no letters or digits ("💰", "-") normalizes to "", which would
+  // loosely equal every other such name; those must match exactly or not at all.
+  const loose = target ? items.filter((item) => normalizeName(item.name) === target) : [];
   if (loose.length === 1) return loose[0];
 
   if (loose.length > 1 || exact.length > 1) {
     const tied = loose.length > 1 ? loose : exact;
-    throw new Error(`More than one ${kind} is named "${ref}": ${describe(tied)}. Pass the ID instead.`);
+    throw new Error(`More than one ${label.one} is named "${ref}": ${describe(tied)}. Pass the ID instead.`);
   }
   const similar = target ? items.filter((item) => normalizeName(item.name).includes(target)) : [];
   const hint = similar.length > 0
     ? `Did you mean: ${describe(similar)}?`
-    : `List the ${kind === "category" ? "categories" : `${kind}s`} to find the right name or ID.`;
-  throw new Error(`No ${kind} named "${ref}". ${hint}`);
+    : `List the ${label.many} to find the right name or ID.`;
+  throw new Error(`No ${label.one} named "${ref}". ${hint}`);
 }
 
 const MAX_SUGGESTIONS = 5;
@@ -82,6 +98,37 @@ async function listCategories(api: ynab.API, budgetId: string): Promise<Named[]>
     .filter((c) => !c.deleted);
 }
 
+/**
+ * Categories a user may rename, retarget or move: nothing hidden and nothing
+ * YNAB manages itself (e.g. "Uncategorized", "Inflow: Ready to Assign"). The
+ * plain "category" kind keeps those, because transactions legitimately use them.
+ */
+async function listEditableCategories(api: ynab.API, budgetId: string): Promise<Named[]> {
+  const response = await api.categories.getCategories(budgetId);
+  return response.data.category_groups
+    .filter((g) => !g.deleted && !g.hidden && !INTERNAL_GROUPS.has(g.name))
+    .flatMap((g) => g.categories)
+    .filter((c) => !c.deleted && !c.hidden);
+}
+
+async function listCategoryGroups(api: ynab.API, budgetId: string): Promise<Named[]> {
+  const response = await api.categories.getCategories(budgetId);
+  return response.data.category_groups.filter((g) => !g.deleted && !g.hidden && !INTERNAL_GROUPS.has(g.name));
+}
+
+/** Like resolveId, for a required reference: a missing or blank value throws instead of reaching YNAB. */
+export async function requireId(
+  api: ynab.API,
+  budgetId: string,
+  kind: EntityKind,
+  ref: string | undefined,
+  field: string,
+): Promise<string> {
+  const id = await resolveId(api, budgetId, kind, ref);
+  if (!id) throw new Error(`${field} is required: pass the ${KIND_LABEL[kind].one}'s ID or name`);
+  return id;
+}
+
 async function listPayees(api: ynab.API, budgetId: string): Promise<Named[]> {
   const response = await api.payees.getPayees(budgetId);
   return response.data.payees.filter((p) => !p.deleted);
@@ -90,6 +137,8 @@ async function listPayees(api: ynab.API, budgetId: string): Promise<Named[]> {
 const LISTERS: Record<EntityKind, (api: ynab.API, budgetId: string) => Promise<Named[]>> = {
   account: listAccounts,
   category: listCategories,
+  editable_category: listEditableCategories,
+  category_group: listCategoryGroups,
   payee: listPayees,
 };
 
