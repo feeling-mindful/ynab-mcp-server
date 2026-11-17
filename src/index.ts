@@ -249,7 +249,7 @@ server.registerTool(CreateCategoryTool.name, {
   title: "Create Category",
   description: CreateCategoryTool.description,
   inputSchema: CreateCategoryTool.inputSchema,
-}, async (input) => CreateCategoryTool.execute(input));
+}, async (input) => CreateCategoryTool.execute(input, api));
 
 server.registerTool(CreateCategoryGroupTool.name, {
   title: "Create Category Group",
@@ -261,7 +261,7 @@ server.registerTool(UpdateCategoryGroupTool.name, {
   title: "Update Category Group",
   description: UpdateCategoryGroupTool.description,
   inputSchema: UpdateCategoryGroupTool.inputSchema,
-}, async (input) => UpdateCategoryGroupTool.execute(input));
+}, async (input) => UpdateCategoryGroupTool.execute(input, api));
 
 server.registerTool(GetPayeeLocationByIdTool.name, {
   title: "Get Payee Location By ID",
