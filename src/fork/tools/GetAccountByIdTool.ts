@@ -6,7 +6,7 @@ import { getBudgetId } from "./budgetUtils.js";
 export const name = "ynab_get_account_by_id";
 export const description = "Returns a single account by ID. Useful for getting detailed information about a specific account.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   accountId: z.string().describe("The ID of the account to retrieve"),
 };
 

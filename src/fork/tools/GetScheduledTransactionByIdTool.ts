@@ -6,7 +6,7 @@ import { getBudgetId } from "./budgetUtils.js";
 export const name = "ynab_get_scheduled_transaction_by_id";
 export const description = "Returns a single scheduled (recurring) transaction by ID.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   scheduledTransactionId: z.string().describe("The ID of the scheduled transaction to retrieve"),
 };
 

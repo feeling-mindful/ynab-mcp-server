@@ -1,12 +1,14 @@
 import type * as ynab from "ynab";
 
+import { scoreMatch } from "../tools/match.js";
 import { configuredPlanId } from "../tools/planId.js";
 import { LAST_USED_BUDGET } from "./tools/budgetUtils.js";
 import {
   createCategorySnapshot,
   isYnabId,
+  listNamed,
+  matchByName,
   resolveId,
-  resolveNamed,
   type CategorySnapshot,
   type EntityKind,
 } from "./tools/resolveUtils.js";
@@ -33,7 +35,7 @@ interface NameField {
   into?: string;
 }
 
-const NAME_FIELDS: Record<string, readonly NameField[]> = {
+export const NAME_FIELDS: Record<string, readonly NameField[]> = {
   ynab_create_transaction: [
     { field: "accountId", kind: "account" },
     { field: "accountName", kind: "account", into: "accountId" },
@@ -59,7 +61,7 @@ const NAME_FIELDS: Record<string, readonly NameField[]> = {
 };
 
 /** Tools whose `subtransactions` carry a `category_name` that upstream matches loosely. */
-const SPLIT_TOOLS = new Set(["ynab_create_transaction", "ynab_update_transaction"]);
+export const SPLIT_TOOLS: ReadonlySet<string> = new Set(["ynab_create_transaction", "ynab_update_transaction"]);
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -88,21 +90,37 @@ async function resolveField(
   return { ...rest, [into]: await resolveId(api, planId, kind, ref, snapshot) };
 }
 
+const EXACT = 1;
+
 /**
- * Splits name their category and take no ID, so each name is replaced by the
- * exact name of the one category it strictly matches. Upstream then finds an
- * exact match, or refuses if two categories share that name.
+ * Splits name their category and take no ID, so upstream matches the name
+ * again after this policy has run. Each name is therefore replaced by the
+ * exact name of the one category it strictly matches, and that name is checked
+ * with upstream's own scoring: it must be an exact match for upstream too, and
+ * for no other category. Otherwise upstream could settle on a different
+ * category than the one resolved here, so the call is refused instead.
+ *
+ * Candidates are the visible categories only, the same set upstream matches
+ * against. A hidden category can not be named in a split.
  */
 async function resolveSplits(input: Input, api: ynab.API, planId: string, snapshot: CategorySnapshot): Promise<Input> {
   if (!Array.isArray(input.subtransactions)) return input;
-  const subtransactions = await Promise.all(
-    input.subtransactions.map(async (split: unknown) => {
-      const name = text((split as Input | null)?.category_name);
-      if (!name) return split;
-      const match = await resolveNamed(api, planId, "category", name, snapshot);
-      return { ...(split as Input), category_name: match.name };
-    }),
-  );
+  const names = input.subtransactions.map((split: unknown) => text((split as Input | null)?.category_name));
+  if (!names.some(Boolean)) return input;
+
+  const categories = await listNamed(api, planId, "visible_category", snapshot);
+  const subtransactions = input.subtransactions.map((split: unknown, index: number) => {
+    const name = names[index];
+    if (!name) return split;
+    const match = matchByName(categories, name, "visible_category");
+    const exactForUpstream = categories.filter((category) => scoreMatch(match.name, category.name) === EXACT);
+    if (exactForUpstream.length !== 1 || exactForUpstream[0].id !== match.id) {
+      throw new Error(
+        `The category "${match.name}" can not be named in a split: its name is not unique once symbols and non-English letters are ignored. Rename it in YNAB, or split the transaction there.`,
+      );
+    }
+    return { ...(split as Input), category_name: match.name };
+  });
   return { ...input, subtransactions };
 }
 

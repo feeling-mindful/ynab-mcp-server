@@ -6,7 +6,7 @@ import { getBudgetId } from "./budgetUtils.js";
 export const name = "ynab_update_scheduled_transaction";
 export const description = "Updates an existing scheduled transaction. Only provide fields you want to change.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   scheduledTransactionId: z.string().describe("The ID of the scheduled transaction to update"),
   accountId: z.string().optional().describe("New account ID"),
   date: z.string().optional().describe("New first occurrence date in ISO format (e.g. 2024-03-24)"),

@@ -6,7 +6,7 @@ import { getBudgetId } from "./budgetUtils.js";
 export const name = "ynab_list_payee_locations";
 export const description = "Lists all payee locations in a budget. Payee locations are used to track where transactions with a payee occur.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
 };
 
 interface ListPayeeLocationsInput {

@@ -4,6 +4,7 @@ import { tools as upstreamTools } from '../../registry';
 import { ynabTokenContext } from '../../fork/tools/apiUtils';
 import * as GetUserTool from '../../fork/tools/GetUserTool';
 import * as ListAccountsTool from '../../tools/ListAccountsTool';
+import * as CreateCategoryTool from '../../fork/tools/CreateCategoryTool';
 
 type Callback = (input: unknown, extra: unknown) => Promise<any>;
 
@@ -145,6 +146,52 @@ describe('fork registry', () => {
       expect(String(url)).toContain('/plans/plan-1/accounts');
       expect((init.method ?? 'GET').toUpperCase()).toBe('GET');
       expect(new Headers(init.headers).get('Authorization')).toBe('Bearer token-a');
+    });
+
+    it('passes a planId given to a fork tool on as its budgetId', async () => {
+      const execute = vi.spyOn(CreateCategoryTool, 'execute').mockResolvedValue({
+        content: [{ type: 'text' as const, text: JSON.stringify({ success: true }) }],
+      } as any);
+      const server = fakeServer();
+      registerForkServer(server, tokenOf, WRITES_ON);
+      const tool = server.registered.get('ynab_create_category')!;
+
+      expect(tool.config.inputSchema.shape).toHaveProperty('planId');
+      await tool.cb({ planId: 'plan-b', name: 'x', categoryGroupId: 'g' }, { token: 'token-a' });
+
+      expect(execute.mock.calls[0][0]).toEqual({ budgetId: 'plan-b', name: 'x', categoryGroupId: 'g' });
+    });
+
+    it('sends a fork tool to the configured plan when only YNAB_PLAN_ID is set', async () => {
+      delete process.env.YNAB_BUDGET_ID;
+      process.env.YNAB_PLAN_ID = 'plan-a';
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+        data: { payee_locations: [] },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      const server = fakeServer();
+      registerForkServer(server, tokenOf, {});
+
+      await server.registered.get('ynab_list_payee_locations')!.cb({}, { token: 'token-a' });
+
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/plan-a/');
+    });
+
+    it('gives each signed-in user their own YNAB client, so upstream caches keyed on it are never shared', async () => {
+      const clients: unknown[] = [];
+      vi.spyOn(ListAccountsTool, 'execute').mockImplementation(async (_input: any, api: any) => {
+        clients.push(api);
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true }) }] } as any;
+      });
+      const server = fakeServer();
+      registerForkServer(server, tokenOf, {});
+      const call = server.registered.get('ynab_list_accounts')!.cb;
+
+      await call({}, { token: 'token-a' });
+      await call({}, { token: 'token-b' });
+      await call({}, { token: 'token-a' });
+
+      expect(clients[0]).not.toBe(clients[1]);
+      expect(clients[2]).toBe(clients[0]);
     });
   });
 });

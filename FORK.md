@@ -21,7 +21,8 @@ fork adds.
   plan settings and the user.
 - **Strict names** (`src/fork/policy.ts`): upstream picks the best fuzzy match
   for a name. Here a partial name is refused with the near misses listed,
-  because an agent may write unattended. A name is also accepted in the ID
+  because an agent may write unattended. A split can only name a visible
+  category. A name is also accepted in the ID
   fields of `ynab_create_transaction`, `ynab_update_transaction`,
   `ynab_get_transactions`, `ynab_move_money` and `ynab_update_category_budget`.
 - **Last-used plan by default**: with no plan given and neither `YNAB_PLAN_ID`
@@ -59,7 +60,9 @@ Conflicts are expected only in the few files both sides edit:
 
 - `package.json`: keep upstream's version, then re-add the fork's lines (the
   `dev`, `build:next`, `start:next` and `typecheck:next` scripts; `mcp-handler`,
-  `next`, `react`, `react-dom` and the two `@types/react*` packages).
+  `next`, `react`, `react-dom` and the two `@types/react*` packages; the
+  `mcp-handler` entry under `overrides`, which lets it run with upstream's
+  newer MCP SDK).
 - `package-lock.json`: take upstream's, then run `npm install`.
 - `.github/workflows/test.yml`: keep `workflow_dispatch`, the
   `typecheck:next` step and the `ci` job.

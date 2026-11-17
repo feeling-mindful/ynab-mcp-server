@@ -6,7 +6,7 @@ import { ynabFetch } from "./apiUtils.js";
 export const name = "ynab_get_money_movement_groups";
 export const description = "Returns all money movement groups for a budget. Money movement groups batch related category transfers together.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
 };
 
 interface GetMoneyMovementGroupsInput {

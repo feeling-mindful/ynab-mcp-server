@@ -8,7 +8,7 @@ import { createCategorySnapshot, requireId, resolveId } from "./resolveUtils.js"
 export const name = "ynab_update_category";
 export const description = "Updates a category's properties (name, note, target) or moves it to another category group. For updating the budgeted amount, use ynab_update_category_budget instead.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID, then your last-used budget)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan, then your last-used budget)"),
   categoryId: z.string().describe("The category to update: its ID or its name"),
   categoryGroupId: z.string().optional().describe("Move the category to this category group: the group's ID or its name"),
   name: z.string().optional().describe("New name for the category"),

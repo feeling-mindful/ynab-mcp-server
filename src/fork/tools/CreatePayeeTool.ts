@@ -6,7 +6,7 @@ import { ynabFetch } from "./apiUtils.js";
 export const name = "ynab_create_payee";
 export const description = "Creates a new payee in the budget. Use this to add a new payee that doesn't exist yet.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   name: z.string().describe("The name of the payee to create"),
 };
 

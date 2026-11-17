@@ -8,7 +8,7 @@ import { requireId } from "./resolveUtils.js";
 export const name = "ynab_update_category_group";
 export const description = "Updates a category group's name. Use this to rename a category group.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   categoryGroupId: z.string().describe("The category group to update: its ID or its name"),
   name: z.string().describe("The new name for the category group"),
 };

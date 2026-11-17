@@ -8,7 +8,7 @@ import { requireId } from "./resolveUtils.js";
 export const name = "ynab_create_category";
 export const description = "Creates a new category in the budget. Optionally set a goal target and goal target date.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   name: z.string().describe("The name of the category"),
   categoryGroupId: z.string().describe("The category group to add this category to: its ID or its name"),
   note: z.string().optional().describe("Optional note for the category"),

@@ -6,7 +6,7 @@ import { getBudgetId } from "./budgetUtils.js";
 export const name = "ynab_delete_scheduled_transaction";
 export const description = "Deletes a scheduled transaction from the budget. This action cannot be undone.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   scheduledTransactionId: z.string().describe("The ID of the scheduled transaction to delete"),
 };
 

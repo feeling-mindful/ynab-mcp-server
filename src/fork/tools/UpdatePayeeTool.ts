@@ -6,7 +6,7 @@ import { getBudgetId } from "./budgetUtils.js";
 export const name = "ynab_update_payee";
 export const description = "Updates an existing payee. Allows renaming a payee.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   payeeId: z.string().describe("The ID of the payee to update"),
   name: z.string().describe("The new name for the payee"),
 };

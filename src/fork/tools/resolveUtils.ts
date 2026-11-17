@@ -11,11 +11,12 @@ export interface Named {
   name: string;
 }
 
-export type EntityKind = "account" | "category" | "editable_category" | "category_group" | "payee";
+export type EntityKind = "account" | "category" | "visible_category" | "editable_category" | "category_group" | "payee";
 
 const KIND_LABEL: Record<EntityKind, { one: string; many: string }> = {
   account: { one: "account", many: "accounts" },
   category: { one: "category", many: "categories" },
+  visible_category: { one: "category", many: "categories" },
   editable_category: { one: "category", many: "categories" },
   category_group: { one: "category group", many: "category groups" },
   payee: { one: "payee", many: "payees" },
@@ -124,6 +125,19 @@ async function listCategories(api: ynab.API, budgetId: string, snapshot?: Catego
 }
 
 /**
+ * Categories that are not hidden, in groups that are not hidden: the same set
+ * upstream's loadCategories (src/tools/splits.ts) lets a split name. Internal
+ * groups stay in, as they do upstream.
+ */
+async function listVisibleCategories(api: ynab.API, budgetId: string, snapshot?: CategorySnapshot): Promise<Named[]> {
+  const groups = await fetchCategoryGroups(api, budgetId, snapshot);
+  return groups
+    .filter((g) => !g.deleted && !g.hidden)
+    .flatMap((g) => g.categories)
+    .filter((c) => !c.deleted && !c.hidden);
+}
+
+/**
  * Categories a user may rename, retarget or move: nothing hidden and nothing
  * YNAB manages itself (e.g. "Uncategorized", "Inflow: Ready to Assign"). The
  * plain "category" kind keeps those, because transactions legitimately use them.
@@ -163,10 +177,16 @@ async function listPayees(api: ynab.API, budgetId: string): Promise<Named[]> {
 const LISTERS: Record<EntityKind, (api: ynab.API, budgetId: string, snapshot?: CategorySnapshot) => Promise<Named[]>> = {
   account: listAccounts,
   category: listCategories,
+  visible_category: listVisibleCategories,
   editable_category: listEditableCategories,
   category_group: listCategoryGroups,
   payee: listPayees,
 };
+
+/** Every live item of one kind. `snapshot` lets several lookups share one category download. */
+export function listNamed(api: ynab.API, budgetId: string, kind: EntityKind, snapshot?: CategorySnapshot): Promise<Named[]> {
+  return LISTERS[kind](api, budgetId, snapshot);
+}
 
 /** Finds the one live item that `name` names, under the strict policy of matchByName. `snapshot` lets several lookups share one category download. */
 export async function resolveNamed(

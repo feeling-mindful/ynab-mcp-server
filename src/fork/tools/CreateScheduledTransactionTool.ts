@@ -6,7 +6,7 @@ import { getBudgetId } from "./budgetUtils.js";
 export const name = "ynab_create_scheduled_transaction";
 export const description = "Creates a new scheduled (recurring) transaction. Scheduled transactions have a future date and can repeat on a given frequency.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   accountId: z.string().describe("The ID of the account"),
   date: z.string().describe("The date of the first occurrence in ISO format (e.g. 2024-03-24). Must be a future date."),
   frequency: z.enum(["never", "daily", "weekly", "everyOtherWeek", "twiceAMonth", "monthly", "everyOtherMonth", "every3Months", "every4Months", "twiceAYear", "yearly", "everyOtherYear"]).describe("How often the transaction repeats"),

@@ -6,7 +6,7 @@ import { ynabFetch } from "./apiUtils.js";
 export const name = "ynab_get_payee_locations_by_payee";
 export const description = "Returns all payee locations for a specific payee. Useful for seeing where transactions with a payee occur.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   payeeId: z.string().describe("The ID of the payee"),
 };
 

@@ -6,7 +6,7 @@ import { ynabFetch } from "./apiUtils.js";
 export const name = "ynab_get_money_movements";
 export const description = "Returns all money movements for a budget. Money movements show where funds were moved between categories.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
 };
 
 interface GetMoneyMovementsInput {

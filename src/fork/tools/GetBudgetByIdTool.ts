@@ -6,7 +6,7 @@ import { getBudgetId } from "./budgetUtils.js";
 export const name = "ynab_get_budget_by_id";
 export const description = "Returns a single budget with all related entities (accounts, categories, payees, etc.). This is effectively a full budget export.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
 };
 
 interface GetBudgetByIdInput {

@@ -6,7 +6,7 @@ import { getBudgetId } from "./budgetUtils.js";
 export const name = "ynab_create_account";
 export const description = "Creates a new account in the budget. Supports checking, savings, credit card, and other account types.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
   name: z.string().describe("The name of the account"),
   type: z.enum(["checking", "savings", "cash", "creditCard", "otherAsset", "otherLiability"]).describe("The type of account. YNAB only lets the API create these types; loans must be added in the app."),
   balance: z.number().describe("The current balance of the account in dollars (e.g. 1500.00)"),
