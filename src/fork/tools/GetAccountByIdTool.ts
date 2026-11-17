@@ -1,23 +1,24 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_get_account_by_id";
 export const description = "Returns a single account by ID. Useful for getting detailed information about a specific account.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   accountId: z.string().describe("The ID of the account to retrieve"),
 };
 
 interface GetAccountByIdInput {
+  planId?: string;
   budgetId?: string;
   accountId: string;
 }
 
 export async function execute(input: GetAccountByIdInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     console.error(`Getting account ${input.accountId} for budget ${budgetId}`);
     const response = await api.accounts.getAccountById(budgetId, input.accountId);

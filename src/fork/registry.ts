@@ -1,7 +1,6 @@
 import * as ynab from "ynab";
-import { z } from "zod";
 
-import { isReadOnly, registerAll, registerTools, type ToolEntry, type ToolRegistrar } from "../registry.js";
+import { isReadOnly, registerAll, registerTools, tools as upstreamTools, type ToolEntry, type ToolRegistrar } from "../registry.js";
 import { getErrorMessage, toolError } from "../tools/errorUtils.js";
 import { applyForkPolicy } from "./policy.js";
 import { ynabTokenContext } from "./tools/apiUtils.js";
@@ -35,7 +34,7 @@ import * as UpdateScheduledTransactionTool from "./tools/UpdateScheduledTransact
  * Upstream files are taken as they are; anything fork-specific lives under
  * src/fork so a sync with upstream does not touch it.
  */
-const ownTools: ToolEntry[] = [
+export const forkTools: ToolEntry[] = [
   // Plans
   { title: "Get Budget", module: GetBudgetByIdTool, writes: false },
   { title: "Get Budget Settings", module: GetBudgetSettingsTool, writes: false },
@@ -67,30 +66,6 @@ const ownTools: ToolEntry[] = [
   { title: "Get Money Movements", module: GetMoneyMovementsTool, writes: false },
   { title: "Get Money Movement Groups", module: GetMoneyMovementGroupsTool, writes: false },
 ];
-
-type ToolModule = ToolEntry["module"];
-
-/**
- * Fork tools were written with `budgetId`; upstream's take `planId` and keep
- * `budgetId` as an alias. This gives a fork tool the same pair, so a caller
- * that passes `planId` to every tool is not silently moved to the default plan.
- */
-function withPlanId(module: ToolModule): ToolModule {
-  if (!("budgetId" in module.inputSchema) || "planId" in module.inputSchema) return module;
-  return {
-    ...module,
-    inputSchema: {
-      planId: z.string().optional().describe("The plan ID (optional, defaults to YNAB_PLAN_ID, then the last-used plan; budgetId is an alias)"),
-      ...module.inputSchema,
-    },
-    execute: (input, api) => {
-      const { planId, ...rest } = (input ?? {}) as { planId?: string; budgetId?: string };
-      return module.execute({ ...rest, budgetId: rest.budgetId || planId }, api);
-    },
-  };
-}
-
-export const forkTools: ToolEntry[] = ownTools.map((tool) => ({ ...tool, module: withPlanId(tool.module) }));
 
 /**
  * Tools that change YNAB are hidden unless YNAB_ALLOW_WRITES is exactly "true",
@@ -131,9 +106,35 @@ function bindTools(api: ynab.API, readOnly: boolean): Map<string, Registered> {
   return bound;
 }
 
+/** Tools that take a plan, and so get the last-used plan when none is given or configured. */
+const PLAN_TOOLS: ReadonlySet<string> = new Set(
+  [...upstreamTools, ...forkTools].filter((tool) => "planId" in tool.module.inputSchema).map((tool) => tool.module.name),
+);
+
+/** The client used only to list tools on the host. Tools never run with it. */
+const NO_CLIENT = new Proxy({} as ynab.API, {
+  get() {
+    throw new Error("No YNAB token for this request. Sign in again.");
+  },
+});
+
+/**
+ * The host builds a new server for every request, so what it registers is
+ * built once per mode and reused: the name and config of each exposed tool.
+ */
+const catalogs = new Map<boolean, Map<string, Record<string, unknown>>>();
+
+function catalogFor(readOnly: boolean): Map<string, Record<string, unknown>> {
+  const cached = catalogs.get(readOnly);
+  if (cached) return cached;
+  const catalog = new Map([...bindTools(NO_CLIENT, readOnly)].map(([name, { config }]) => [name, config]));
+  catalogs.set(readOnly, catalog);
+  return catalog;
+}
+
 interface Session {
   api: ynab.API;
-  tools: Map<string, Registered>;
+  run: Map<string, Run>;
 }
 
 const MAX_SESSIONS = 8;
@@ -142,30 +143,25 @@ const sessions = new Map<string, Session>();
 /**
  * One YNAB client, and one set of tools bound to it, per signed-in token.
  * Upstream keeps short-lived caches keyed on the client object, so users must
- * never share a client: each token gets its own.
+ * never share a client: each token gets its own. The least recently used
+ * session is dropped when there are too many.
  */
 function sessionFor(token: string, readOnly: boolean): Session {
   const key = `${readOnly ? "ro" : "rw"}:${token}`;
   const cached = sessions.get(key);
-  if (cached) return cached;
-  if (sessions.size >= MAX_SESSIONS) sessions.clear();
+  if (cached) {
+    // A Map keeps insertion order; re-inserting marks this one as just used.
+    sessions.delete(key);
+    sessions.set(key, cached);
+    return cached;
+  }
+  if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value as string);
   const api = new ynab.API(token);
-  const session = { api, tools: bindTools(api, readOnly) };
+  const run = new Map([...bindTools(api, readOnly)].map(([name, tool]) => [name, tool.run]));
+  const session = { api, run };
   sessions.set(key, session);
   return session;
 }
-
-function acceptsPlanId(config: Record<string, unknown>): boolean {
-  const shape = (config.inputSchema as { shape?: Record<string, unknown> } | undefined)?.shape;
-  return Boolean(shape && "planId" in shape);
-}
-
-/** The client used only to list tools on the host. Tools never run with it. */
-const NO_CLIENT = new Proxy({} as ynab.API, {
-  get() {
-    throw new Error("No YNAB token for this request. Sign in again.");
-  },
-});
 
 /**
  * Registers upstream's tools and the fork's on the host server. Every call
@@ -178,21 +174,22 @@ export function registerForkServer(
   env: Record<string, string | undefined> = process.env,
 ): number {
   const readOnly = !writesEnabled(env);
-  const catalog = bindTools(NO_CLIENT, readOnly);
+  const catalog = catalogFor(readOnly);
 
-  for (const [name, { config }] of catalog) {
-    const takesPlan = acceptsPlanId(config);
+  for (const [name, config] of catalog) {
     server.registerTool(name, config, async (input: unknown, extra: unknown) => {
       const token = tokenOf(extra);
       if (!token) {
         return toolError("No YNAB token for this request. Sign in again, or set YNAB_API_TOKEN for MCP_API_KEY clients.");
       }
-      const { api, tools } = sessionFor(token, readOnly);
-      const tool = tools.get(name);
-      if (!tool) return toolError(`Tool ${name} is not available.`);
+      const session = sessionFor(token, readOnly);
+      // The catalog and the session come from the same tool list, so this only
+      // misses if upstream's own env switches changed between the two.
+      const run = session.run.get(name);
+      if (!run) return toolError(`Tool ${name} is not available.`);
       return ynabTokenContext.run(token, async () => {
         try {
-          return await tool.run(await applyForkPolicy(name, input as Record<string, unknown>, api, takesPlan));
+          return await run(await applyForkPolicy(name, input as Record<string, unknown>, session.api, PLAN_TOOLS.has(name)));
         } catch (error) {
           return toolError(getErrorMessage(error));
         }

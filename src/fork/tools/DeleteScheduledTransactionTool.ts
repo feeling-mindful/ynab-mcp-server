@@ -1,23 +1,24 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_delete_scheduled_transaction";
 export const description = "Deletes a scheduled transaction from the budget. This action cannot be undone.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   scheduledTransactionId: z.string().describe("The ID of the scheduled transaction to delete"),
 };
 
 interface DeleteScheduledTransactionInput {
+  planId?: string;
   budgetId?: string;
   scheduledTransactionId: string;
 }
 
 export async function execute(input: DeleteScheduledTransactionInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     console.error(`Deleting scheduled transaction ${input.scheduledTransactionId} from budget ${budgetId}`);
     const response = await api.scheduledTransactions.deleteScheduledTransaction(

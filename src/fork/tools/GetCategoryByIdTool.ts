@@ -1,23 +1,24 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_get_category_by_id";
 export const description = "Returns a single category by ID. Amounts are specific to the current budget month (UTC).";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   categoryId: z.string().describe("The ID of the category to retrieve"),
 };
 
 interface GetCategoryByIdInput {
+  planId?: string;
   budgetId?: string;
   categoryId: string;
 }
 
 export async function execute(input: GetCategoryByIdInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     console.error(`Getting category ${input.categoryId} for budget ${budgetId}`);
     const response = await api.categories.getCategoryById(budgetId, input.categoryId);

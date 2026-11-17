@@ -19,12 +19,10 @@ const run = (tool: string, input: Record<string, unknown> | null, acceptsPlanId 
   applyForkPolicy(tool, input, mockApi as any, acceptsPlanId);
 
 describe('applyForkPolicy', () => {
-  const saved = { plan: process.env.YNAB_PLAN_ID, budget: process.env.YNAB_BUDGET_ID };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.YNAB_PLAN_ID;
-    process.env.YNAB_BUDGET_ID = 'plan-1';
+    vi.stubEnv('YNAB_PLAN_ID', undefined);
+    vi.stubEnv('YNAB_BUDGET_ID', 'plan-1');
     mockApi.accounts.getAccounts.mockResolvedValue({
       data: { accounts: [
         { id: ACCOUNT_ID, name: 'Ally Checking', deleted: false, closed: false },
@@ -43,18 +41,17 @@ describe('applyForkPolicy', () => {
   });
 
   afterEach(() => {
-    if (saved.plan === undefined) delete process.env.YNAB_PLAN_ID; else process.env.YNAB_PLAN_ID = saved.plan;
-    if (saved.budget === undefined) delete process.env.YNAB_BUDGET_ID; else process.env.YNAB_BUDGET_ID = saved.budget;
+    vi.unstubAllEnvs();
   });
 
   describe('default plan', () => {
     it('falls back to the last-used plan when none is given or configured', async () => {
-      delete process.env.YNAB_BUDGET_ID;
+      vi.stubEnv('YNAB_BUDGET_ID', undefined);
       expect(await run('ynab_list_accounts', {})).toEqual({ planId: 'last-used' });
     });
 
     it('treats a missing input as an empty one', async () => {
-      delete process.env.YNAB_BUDGET_ID;
+      vi.stubEnv('YNAB_BUDGET_ID', undefined);
       expect(await run('ynab_list_accounts', null)).toEqual({ planId: 'last-used' });
     });
 
@@ -62,7 +59,7 @@ describe('applyForkPolicy', () => {
       ['a planId is given', { planId: 'p' }],
       ['a legacy budgetId is given', { budgetId: 'b' }],
     ])('leaves the input alone when %s', async (_label, input) => {
-      delete process.env.YNAB_BUDGET_ID;
+      vi.stubEnv('YNAB_BUDGET_ID', undefined);
       expect(await run('ynab_list_accounts', input)).toEqual(input);
     });
 
@@ -71,7 +68,7 @@ describe('applyForkPolicy', () => {
     });
 
     it('adds nothing to a tool that takes no planId', async () => {
-      delete process.env.YNAB_BUDGET_ID;
+      vi.stubEnv('YNAB_BUDGET_ID', undefined);
       expect(await run('ynab_get_user', {}, false)).toEqual({});
     });
   });
@@ -132,7 +129,7 @@ describe('applyForkPolicy', () => {
     });
 
     it('looks names up in the last-used plan when none is configured', async () => {
-      delete process.env.YNAB_BUDGET_ID;
+      vi.stubEnv('YNAB_BUDGET_ID', undefined);
       const result = await run('ynab_get_transactions', { accountId: 'Ally Savings' });
       expect(result).toEqual({ planId: 'last-used', accountId: 'a-2' });
       expect(mockApi.accounts.getAccounts).toHaveBeenCalledWith('last-used');

@@ -1,23 +1,24 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_get_payee_by_id";
 export const description = "Returns a single payee by ID. Useful for getting detailed information about a specific payee.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   payeeId: z.string().describe("The ID of the payee to retrieve"),
 };
 
 interface GetPayeeByIdInput {
+  planId?: string;
   budgetId?: string;
   payeeId: string;
 }
 
 export async function execute(input: GetPayeeByIdInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     console.error(`Getting payee ${input.payeeId} for budget ${budgetId}`);
     const response = await api.payees.getPayeeById(budgetId, input.payeeId);

@@ -1,21 +1,22 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_get_budget_by_id";
 export const description = "Returns a single budget with all related entities (accounts, categories, payees, etc.). This is effectively a full budget export.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
 };
 
 interface GetBudgetByIdInput {
+  planId?: string;
   budgetId?: string;
 }
 
 export async function execute(input: GetBudgetByIdInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     console.error(`Getting full budget detail for budget ${budgetId}`);
     const response = await api.plans.getPlanById(budgetId);

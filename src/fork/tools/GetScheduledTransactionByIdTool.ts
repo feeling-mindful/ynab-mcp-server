@@ -1,23 +1,24 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_get_scheduled_transaction_by_id";
 export const description = "Returns a single scheduled (recurring) transaction by ID.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   scheduledTransactionId: z.string().describe("The ID of the scheduled transaction to retrieve"),
 };
 
 interface GetScheduledTransactionByIdInput {
+  planId?: string;
   budgetId?: string;
   scheduledTransactionId: string;
 }
 
 export async function execute(input: GetScheduledTransactionByIdInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     console.error(`Getting scheduled transaction ${input.scheduledTransactionId} for budget ${budgetId}`);
     const response = await api.scheduledTransactions.getScheduledTransactionById(

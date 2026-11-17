@@ -1,21 +1,22 @@
 import { z } from "zod";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 import { ynabFetch } from "./apiUtils.js";
 
 export const name = "ynab_get_money_movements";
 export const description = "Returns all money movements for a budget. Money movements show where funds were moved between categories.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
 };
 
 interface GetMoneyMovementsInput {
+  planId?: string;
   budgetId?: string;
 }
 
 export async function execute(input: GetMoneyMovementsInput) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     const response: any = await ynabFetch(`/plans/${budgetId}/money_movements`);
 

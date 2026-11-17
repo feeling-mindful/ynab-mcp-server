@@ -4,7 +4,6 @@ import { tools as upstreamTools } from '../../registry';
 import { ynabTokenContext } from '../../fork/tools/apiUtils';
 import * as GetUserTool from '../../fork/tools/GetUserTool';
 import * as ListAccountsTool from '../../tools/ListAccountsTool';
-import * as CreateCategoryTool from '../../fork/tools/CreateCategoryTool';
 
 type Callback = (input: unknown, extra: unknown) => Promise<any>;
 
@@ -19,22 +18,21 @@ function fakeServer() {
   };
 }
 
+const ok = () => ({ content: [{ type: 'text' as const, text: JSON.stringify({ success: true }) }] });
+const json = (body: unknown) =>
+  new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
 const tokenOf = (extra: unknown) => (extra as { token?: string } | undefined)?.token;
 const WRITES_ON = { YNAB_ALLOW_WRITES: 'true' };
 
 describe('fork registry', () => {
-  const savedBudget = process.env.YNAB_BUDGET_ID;
-  const savedPlan = process.env.YNAB_PLAN_ID;
-
   beforeEach(() => {
-    delete process.env.YNAB_PLAN_ID;
-    process.env.YNAB_BUDGET_ID = 'plan-1';
+    vi.stubEnv('YNAB_PLAN_ID', undefined);
+    vi.stubEnv('YNAB_BUDGET_ID', 'plan-1');
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    if (savedBudget === undefined) delete process.env.YNAB_BUDGET_ID; else process.env.YNAB_BUDGET_ID = savedBudget;
-    if (savedPlan === undefined) delete process.env.YNAB_PLAN_ID; else process.env.YNAB_PLAN_ID = savedPlan;
+    vi.unstubAllEnvs();
   });
 
   describe('writesEnabled', () => {
@@ -101,7 +99,7 @@ describe('fork registry', () => {
       vi.spyOn(GetUserTool, 'execute').mockImplementation(async () => {
         await Promise.resolve();
         seen.push(ynabTokenContext.getStore());
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true }) }] };
+        return ok();
       });
       const server = fakeServer();
       registerForkServer(server, tokenOf, {});
@@ -114,10 +112,8 @@ describe('fork registry', () => {
     });
 
     it('defaults an upstream tool to the last-used plan when none is configured', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-      const execute = vi.spyOn(ListAccountsTool, 'execute').mockResolvedValue({
-        content: [{ type: 'text' as const, text: JSON.stringify({ success: true }) }],
-      } as any);
+      vi.stubEnv('YNAB_BUDGET_ID', undefined);
+      const execute = vi.spyOn(ListAccountsTool, 'execute').mockResolvedValue(ok() as any);
       const server = fakeServer();
       registerForkServer(server, tokenOf, {});
 
@@ -127,9 +123,9 @@ describe('fork registry', () => {
     });
 
     it('reports a name that is not exact as a tool error, without running the tool', async () => {
-      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({
         data: { accounts: [{ id: 'a-1', name: 'Ally Checking', deleted: false, closed: false }], server_knowledge: 1 },
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }));
       const server = fakeServer();
       registerForkServer(server, tokenOf, WRITES_ON);
 
@@ -148,26 +144,33 @@ describe('fork registry', () => {
       expect(new Headers(init.headers).get('Authorization')).toBe('Bearer token-a');
     });
 
-    it('passes a planId given to a fork tool on as its budgetId', async () => {
-      const execute = vi.spyOn(CreateCategoryTool, 'execute').mockResolvedValue({
-        content: [{ type: 'text' as const, text: JSON.stringify({ success: true }) }],
-      } as any);
+    it('runs a fork tool on the plan the call names, planId winning over budgetId as it does upstream', async () => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json({ data: { payee_locations: [] } }));
       const server = fakeServer();
-      registerForkServer(server, tokenOf, WRITES_ON);
-      const tool = server.registered.get('ynab_create_category')!;
+      registerForkServer(server, tokenOf, {});
+      const tool = server.registered.get('ynab_list_payee_locations')!;
 
       expect(tool.config.inputSchema.shape).toHaveProperty('planId');
-      await tool.cb({ planId: 'plan-b', name: 'x', categoryGroupId: 'g' }, { token: 'token-a' });
+      await tool.cb({ planId: 'plan-b', budgetId: 'plan-c' }, { token: 'token-a' });
 
-      expect(execute.mock.calls[0][0]).toEqual({ budgetId: 'plan-b', name: 'x', categoryGroupId: 'g' });
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/plan-b/');
+    });
+
+    it('builds the tool list once and reuses it for every request', () => {
+      const first = fakeServer();
+      const second = fakeServer();
+      registerForkServer(first, tokenOf, {});
+      registerForkServer(second, tokenOf, {});
+
+      expect(second.registered.get('ynab_list_accounts')!.config).toBe(first.registered.get('ynab_list_accounts')!.config);
     });
 
     it('sends a fork tool to the configured plan when only YNAB_PLAN_ID is set', async () => {
-      delete process.env.YNAB_BUDGET_ID;
-      process.env.YNAB_PLAN_ID = 'plan-a';
-      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+      vi.stubEnv('YNAB_BUDGET_ID', undefined);
+      vi.stubEnv('YNAB_PLAN_ID', 'plan-a');
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json({
         data: { payee_locations: [] },
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }));
       const server = fakeServer();
       registerForkServer(server, tokenOf, {});
 
@@ -180,7 +183,7 @@ describe('fork registry', () => {
       const clients: unknown[] = [];
       vi.spyOn(ListAccountsTool, 'execute').mockImplementation(async (_input: any, api: any) => {
         clients.push(api);
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true }) }] } as any;
+        return ok() as any;
       });
       const server = fakeServer();
       registerForkServer(server, tokenOf, {});

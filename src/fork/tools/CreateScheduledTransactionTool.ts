@@ -1,12 +1,12 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_create_scheduled_transaction";
 export const description = "Creates a new scheduled (recurring) transaction. Scheduled transactions have a future date and can repeat on a given frequency.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   accountId: z.string().describe("The ID of the account"),
   date: z.string().describe("The date of the first occurrence in ISO format (e.g. 2024-03-24). Must be a future date."),
   frequency: z.enum(["never", "daily", "weekly", "everyOtherWeek", "twiceAMonth", "monthly", "everyOtherMonth", "every3Months", "every4Months", "twiceAYear", "yearly", "everyOtherYear"]).describe("How often the transaction repeats"),
@@ -19,6 +19,7 @@ export const inputSchema = {
 };
 
 interface CreateScheduledTransactionInput {
+  planId?: string;
   budgetId?: string;
   accountId: string;
   date: string;
@@ -33,7 +34,7 @@ interface CreateScheduledTransactionInput {
 
 export async function execute(input: CreateScheduledTransactionInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     if (!input.payeeId && !input.payeeName) {
       throw new Error("Either payeeId or payeeName must be provided");

@@ -1,12 +1,12 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_update_scheduled_transaction";
 export const description = "Updates an existing scheduled transaction. Only provide fields you want to change.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   scheduledTransactionId: z.string().describe("The ID of the scheduled transaction to update"),
   accountId: z.string().optional().describe("New account ID"),
   date: z.string().optional().describe("New first occurrence date in ISO format (e.g. 2024-03-24)"),
@@ -20,6 +20,7 @@ export const inputSchema = {
 };
 
 interface UpdateScheduledTransactionInput {
+  planId?: string;
   budgetId?: string;
   scheduledTransactionId: string;
   accountId?: string;
@@ -35,7 +36,7 @@ interface UpdateScheduledTransactionInput {
 
 export async function execute(input: UpdateScheduledTransactionInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     const update: any = {};
 

@@ -1,14 +1,14 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 import { ynabFetch } from "./apiUtils.js";
 import { requireId } from "./resolveUtils.js";
 
 export const name = "ynab_create_category";
 export const description = "Creates a new category in the budget. Optionally set a goal target and goal target date.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   name: z.string().describe("The name of the category"),
   categoryGroupId: z.string().describe("The category group to add this category to: its ID or its name"),
   note: z.string().optional().describe("Optional note for the category"),
@@ -17,6 +17,7 @@ export const inputSchema = {
 };
 
 interface CreateCategoryInput {
+  planId?: string;
   budgetId?: string;
   name: string;
   categoryGroupId: string;
@@ -27,7 +28,7 @@ interface CreateCategoryInput {
 
 export async function execute(input: CreateCategoryInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
     const categoryGroupId = await requireId(api, budgetId, "category_group", input.categoryGroupId, "categoryGroupId");
 
     const category: any = {

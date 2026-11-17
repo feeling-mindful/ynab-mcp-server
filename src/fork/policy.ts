@@ -2,7 +2,7 @@ import type * as ynab from "ynab";
 
 import { scoreMatch } from "../tools/match.js";
 import { configuredPlanId } from "../tools/planId.js";
-import { LAST_USED_BUDGET } from "./tools/budgetUtils.js";
+import { givenPlanId, LAST_USED_BUDGET, resolvePlan } from "./tools/budgetUtils.js";
 import {
   createCategorySnapshot,
   isYnabId,
@@ -68,26 +68,30 @@ function text(value: unknown): string | undefined {
 }
 
 function withDefaultPlan(input: Input, acceptsPlanId: boolean): Input {
-  if (!acceptsPlanId || text(input.planId) || text(input.budgetId) || configuredPlanId()) return input;
+  if (!acceptsPlanId || givenPlanId(input) || configuredPlanId()) return input;
   return { ...input, planId: LAST_USED_BUDGET };
 }
 
+/** The change one name field makes to the input: nothing, or a name swapped for its ID. */
 async function resolveField(
   input: Input,
   { field, kind, into }: NameField,
   api: ynab.API,
   planId: string,
   snapshot: CategorySnapshot,
-): Promise<Input> {
+): Promise<(current: Input) => Input> {
+  const keep = (current: Input) => current;
   const ref = text(input[field]);
-  if (!ref) return input;
+  if (!ref) return keep;
   if (!into) {
-    return isYnabId(ref) ? input : { ...input, [field]: await resolveId(api, planId, kind, ref, snapshot) };
+    if (isYnabId(ref)) return keep;
+    const id = await resolveId(api, planId, kind, ref, snapshot);
+    return (current) => ({ ...current, [field]: id });
   }
   // The tool prefers the ID when both are given, so the name is not consulted.
-  if (text(input[into])) return input;
-  const { [field]: _name, ...rest } = input;
-  return { ...rest, [into]: await resolveId(api, planId, kind, ref, snapshot) };
+  if (text(input[into])) return keep;
+  const id = await resolveId(api, planId, kind, ref, snapshot);
+  return ({ [field]: _name, ...rest }) => ({ ...rest, [into]: id });
 }
 
 const EXACT = 1;
@@ -103,10 +107,16 @@ const EXACT = 1;
  * Candidates are the visible categories only, the same set upstream matches
  * against. A hidden category can not be named in a split.
  */
-async function resolveSplits(input: Input, api: ynab.API, planId: string, snapshot: CategorySnapshot): Promise<Input> {
-  if (!Array.isArray(input.subtransactions)) return input;
+async function resolveSplits(
+  input: Input,
+  api: ynab.API,
+  planId: string,
+  snapshot: CategorySnapshot,
+): Promise<(current: Input) => Input> {
+  const keep = (current: Input) => current;
+  if (!Array.isArray(input.subtransactions)) return keep;
   const names = input.subtransactions.map((split: unknown) => text((split as Input | null)?.category_name));
-  if (!names.some(Boolean)) return input;
+  if (!names.some(Boolean)) return keep;
 
   const categories = await listNamed(api, planId, "visible_category", snapshot);
   const subtransactions = input.subtransactions.map((split: unknown, index: number) => {
@@ -121,7 +131,7 @@ async function resolveSplits(input: Input, api: ynab.API, planId: string, snapsh
     }
     return { ...(split as Input), category_name: match.name };
   });
-  return { ...input, subtransactions };
+  return (current) => ({ ...current, subtransactions });
 }
 
 /** Returns the input the upstream tool should run with. Throws, without writing, when a name is not exact. */
@@ -136,11 +146,17 @@ export async function applyForkPolicy(
   const hasSplits = SPLIT_TOOLS.has(toolName);
   if (fields.length === 0 && !hasSplits) return input;
 
-  const planId = text(input.planId) ?? text(input.budgetId) ?? configuredPlanId() ?? LAST_USED_BUDGET;
+  const planId = resolvePlan(input);
   const snapshot = createCategorySnapshot();
+  // Accounts, categories and payees are separate downloads, so look them up
+  // together. Each lookup reads only the original input; failures are reported
+  // in field order.
+  const lookups = [
+    ...fields.map((field) => resolveField(input, field, api, planId, snapshot)),
+    hasSplits ? resolveSplits(input, api, planId, snapshot) : Promise.resolve((current: Input) => current),
+  ];
+  for (const lookup of lookups) lookup.catch(() => undefined);
   let next = input;
-  for (const field of fields) {
-    next = await resolveField(next, field, api, planId, snapshot);
-  }
-  return hasSplits ? resolveSplits(next, api, planId, snapshot) : next;
+  for (const lookup of lookups) next = (await lookup)(next);
+  return next;
 }

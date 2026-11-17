@@ -1,23 +1,24 @@
 import { z } from "zod";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 import { ynabFetch } from "./apiUtils.js";
 
 export const name = "ynab_create_category_group";
 export const description = "Creates a new category group in the budget.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   name: z.string().describe("The name of the category group"),
 };
 
 interface CreateCategoryGroupInput {
+  planId?: string;
   budgetId?: string;
   name: string;
 }
 
 export async function execute(input: CreateCategoryGroupInput) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     const response: any = await ynabFetch(`/plans/${budgetId}/category_groups`, {
       method: "POST",

@@ -1,23 +1,24 @@
 import { z } from "zod";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 import { ynabFetch } from "./apiUtils.js";
 
 export const name = "ynab_get_payee_locations_by_payee";
 export const description = "Returns all payee locations for a specific payee. Useful for seeing where transactions with a payee occur.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   payeeId: z.string().describe("The ID of the payee"),
 };
 
 interface GetPayeeLocationsByPayeeInput {
+  planId?: string;
   budgetId?: string;
   payeeId: string;
 }
 
 export async function execute(input: GetPayeeLocationsByPayeeInput) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     const response: any = await ynabFetch(`/plans/${budgetId}/payees/${input.payeeId}/payee_locations`);
 

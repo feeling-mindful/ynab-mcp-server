@@ -1,15 +1,14 @@
 import * as ynab from "ynab";
 
+import type { NamedEntity } from "../../tools/match.js";
+
 /**
  * Lets tools accept a YNAB name ("Ally Checking", "Groceries") anywhere they
  * accept an ID. An ID-shaped value is returned as is, with no API call; a name
  * is looked up in the budget's live list and must resolve to exactly one item.
  */
 
-export interface Named {
-  id: string;
-  name: string;
-}
+export type Named = NamedEntity;
 
 export type EntityKind = "account" | "category" | "visible_category" | "editable_category" | "category_group" | "payee";
 
@@ -116,44 +115,23 @@ async function fetchCategoryGroups(
   return pending;
 }
 
-async function listCategories(api: ynab.API, budgetId: string, snapshot?: CategorySnapshot): Promise<Named[]> {
-  const groups = await fetchCategoryGroups(api, budgetId, snapshot);
-  return groups
-    .filter((g) => !g.deleted)
-    .flatMap((g) => g.categories)
-    .filter((c) => !c.deleted);
+type Group = ynab.CategoryGroupWithCategories;
+
+const live = (item: { deleted: boolean }) => !item.deleted;
+const shown = (item: { deleted: boolean; hidden: boolean }) => !item.deleted && !item.hidden;
+/** A group the user owns: shown, and not one YNAB manages itself. */
+const editableGroup = (group: Group) => shown(group) && !INTERNAL_GROUPS.has(group.name);
+
+type Lister = (api: ynab.API, budgetId: string, snapshot?: CategorySnapshot) => Promise<Named[]>;
+
+/** Lists the categories that pass `categoryOk`, in the groups that pass `groupOk`. */
+function categoriesIn(groupOk: (group: Group) => boolean, categoryOk: (category: ynab.Category) => boolean): Lister {
+  return async (api, budgetId, snapshot) =>
+    (await fetchCategoryGroups(api, budgetId, snapshot)).filter(groupOk).flatMap((group) => group.categories).filter(categoryOk);
 }
 
-/**
- * Categories that are not hidden, in groups that are not hidden: the same set
- * upstream's loadCategories (src/tools/splits.ts) lets a split name. Internal
- * groups stay in, as they do upstream.
- */
-async function listVisibleCategories(api: ynab.API, budgetId: string, snapshot?: CategorySnapshot): Promise<Named[]> {
-  const groups = await fetchCategoryGroups(api, budgetId, snapshot);
-  return groups
-    .filter((g) => !g.deleted && !g.hidden)
-    .flatMap((g) => g.categories)
-    .filter((c) => !c.deleted && !c.hidden);
-}
-
-/**
- * Categories a user may rename, retarget or move: nothing hidden and nothing
- * YNAB manages itself (e.g. "Uncategorized", "Inflow: Ready to Assign"). The
- * plain "category" kind keeps those, because transactions legitimately use them.
- */
-async function listEditableCategories(api: ynab.API, budgetId: string, snapshot?: CategorySnapshot): Promise<Named[]> {
-  const groups = await fetchCategoryGroups(api, budgetId, snapshot);
-  return groups
-    .filter((g) => !g.deleted && !g.hidden && !INTERNAL_GROUPS.has(g.name))
-    .flatMap((g) => g.categories)
-    .filter((c) => !c.deleted && !c.hidden);
-}
-
-async function listCategoryGroups(api: ynab.API, budgetId: string, snapshot?: CategorySnapshot): Promise<Named[]> {
-  const groups = await fetchCategoryGroups(api, budgetId, snapshot);
-  return groups.filter((g) => !g.deleted && !g.hidden && !INTERNAL_GROUPS.has(g.name));
-}
+const listCategoryGroups: Lister = async (api, budgetId, snapshot) =>
+  (await fetchCategoryGroups(api, budgetId, snapshot)).filter(editableGroup);
 
 /** Like resolveId, for a required reference: a missing or blank value throws instead of reaching YNAB. */
 export async function requireId(
@@ -174,11 +152,16 @@ async function listPayees(api: ynab.API, budgetId: string): Promise<Named[]> {
   return response.data.payees.filter((p) => !p.deleted);
 }
 
-const LISTERS: Record<EntityKind, (api: ynab.API, budgetId: string, snapshot?: CategorySnapshot) => Promise<Named[]>> = {
+const LISTERS: Record<EntityKind, Lister> = {
   account: listAccounts,
-  category: listCategories,
-  visible_category: listVisibleCategories,
-  editable_category: listEditableCategories,
+  // Hidden and internal categories stay in, because transactions legitimately use them.
+  category: categoriesIn(live, live),
+  // The same set upstream's loadCategories (src/tools/splits.ts) lets a split
+  // name. Internal groups stay in, as they do upstream.
+  visible_category: categoriesIn(shown, shown),
+  // What a user may rename, retarget or move: nothing hidden and nothing YNAB
+  // manages itself (e.g. "Uncategorized", "Inflow: Ready to Assign").
+  editable_category: categoriesIn(editableGroup, shown),
   category_group: listCategoryGroups,
   payee: listPayees,
 };
@@ -186,18 +169,6 @@ const LISTERS: Record<EntityKind, (api: ynab.API, budgetId: string, snapshot?: C
 /** Every live item of one kind. `snapshot` lets several lookups share one category download. */
 export function listNamed(api: ynab.API, budgetId: string, kind: EntityKind, snapshot?: CategorySnapshot): Promise<Named[]> {
   return LISTERS[kind](api, budgetId, snapshot);
-}
-
-/** Finds the one live item that `name` names, under the strict policy of matchByName. `snapshot` lets several lookups share one category download. */
-export async function resolveNamed(
-  api: ynab.API,
-  budgetId: string,
-  kind: EntityKind,
-  name: string,
-  snapshot?: CategorySnapshot,
-): Promise<Named> {
-  const items = await LISTERS[kind](api, budgetId, snapshot);
-  return matchByName(items, name.trim(), kind);
 }
 
 /** Resolves an ID-or-name to an ID. `undefined` in, `undefined` out. `snapshot` lets several lookups share one category download. */
@@ -211,5 +182,5 @@ export async function resolveId(
   if (ref === undefined) return undefined;
   const trimmed = ref.trim();
   if (!trimmed || isYnabId(trimmed)) return trimmed || undefined;
-  return (await resolveNamed(api, budgetId, kind, trimmed, snapshot)).id;
+  return matchByName(await listNamed(api, budgetId, kind, snapshot), trimmed, kind).id;
 }

@@ -1,14 +1,14 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 import { ynabFetch } from "./apiUtils.js";
 import { createCategorySnapshot, requireId, resolveId } from "./resolveUtils.js";
 
 export const name = "ynab_update_category";
 export const description = "Updates a category's properties (name, note, target) or moves it to another category group. For updating the budgeted amount, use ynab_update_category_budget instead.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan, then your last-used budget)"),
+  ...planIdFields,
   categoryId: z.string().describe("The category to update: its ID or its name"),
   categoryGroupId: z.string().optional().describe("Move the category to this category group: the group's ID or its name"),
   name: z.string().optional().describe("New name for the category"),
@@ -18,6 +18,7 @@ export const inputSchema = {
 };
 
 interface UpdateCategoryInput {
+  planId?: string;
   budgetId?: string;
   categoryId: string;
   categoryGroupId?: string;
@@ -54,7 +55,7 @@ function buildPatch(input: UpdateCategoryInput, categoryGroupId: string | undefi
 
 export async function execute(input: UpdateCategoryInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
     // Both lookups read the same category tree; share one download between them.
     const snapshot = createCategorySnapshot();
     const categoryId = await requireId(api, budgetId, "editable_category", input.categoryId, "categoryId", snapshot);

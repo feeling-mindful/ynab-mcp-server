@@ -1,23 +1,24 @@
 import { z } from "zod";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 import { ynabFetch } from "./apiUtils.js";
 
 export const name = "ynab_get_payee_location_by_id";
 export const description = "Returns a single payee location by ID. Payee locations store GPS coordinates for payees.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   payeeLocationId: z.string().describe("The ID of the payee location"),
 };
 
 interface GetPayeeLocationByIdInput {
+  planId?: string;
   budgetId?: string;
   payeeLocationId: string;
 }
 
 export async function execute(input: GetPayeeLocationByIdInput) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     const response: any = await ynabFetch(`/plans/${budgetId}/payee_locations/${input.payeeLocationId}`);
 

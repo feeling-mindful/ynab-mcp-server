@@ -1,21 +1,22 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_get_budget_settings";
 export const description = "Returns the settings for a specific budget, including currency format, date format, and other configuration.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
 };
 
 interface GetBudgetSettingsInput {
+  planId?: string;
   budgetId?: string;
 }
 
 export async function execute(input: GetBudgetSettingsInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     console.error(`Getting settings for budget ${budgetId}`);
     const response = await api.plans.getPlanSettingsById(budgetId);

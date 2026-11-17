@@ -1,17 +1,18 @@
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "../../tools/errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { planIdFields, resolvePlan } from "./budgetUtils.js";
 
 export const name = "ynab_update_payee";
 export const description = "Updates an existing payee. Allows renaming a payee.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_PLAN_ID, then the last-used plan)"),
+  ...planIdFields,
   payeeId: z.string().describe("The ID of the payee to update"),
   name: z.string().describe("The new name for the payee"),
 };
 
 interface UpdatePayeeInput {
+  planId?: string;
   budgetId?: string;
   payeeId: string;
   name: string;
@@ -19,7 +20,7 @@ interface UpdatePayeeInput {
 
 export async function execute(input: UpdatePayeeInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlan(input);
 
     const data: ynab.PatchPayeeWrapper = {
       payee: {
