@@ -24,6 +24,7 @@ import * as GetPayeeLocationsByPayeeTool from "./tools/GetPayeeLocationsByPayeeT
 import * as GetScheduledTransactionByIdTool from "./tools/GetScheduledTransactionByIdTool.js";
 import * as GetUserTool from "./tools/GetUserTool.js";
 import * as ListPayeeLocationsTool from "./tools/ListPayeeLocationsTool.js";
+import * as ListPlansTool from "./tools/ListPlansTool.js";
 import * as UpdateCategoryGroupTool from "./tools/UpdateCategoryGroupTool.js";
 import * as UpdateCategoryTool from "./tools/UpdateCategoryTool.js";
 import * as UpdatePayeeTool from "./tools/UpdatePayeeTool.js";
@@ -33,9 +34,13 @@ import * as UpdateScheduledTransactionTool from "./tools/UpdateScheduledTransact
  * The tools this fork adds beside upstream's `tools` in ../registry.ts.
  * Upstream files are taken as they are; anything fork-specific lives under
  * src/fork so a sync with upstream does not touch it.
+ *
+ * A fork tool with the same name as an upstream tool replaces it here: the
+ * fork's are registered second. Only the names in REPLACES_UPSTREAM may do so.
  */
 export const forkTools: ToolEntry[] = [
   // Plans
+  { title: "List Plans", module: ListPlansTool, writes: false },
   { title: "Get Budget", module: GetBudgetByIdTool, writes: false },
   { title: "Get Budget Settings", module: GetBudgetSettingsTool, writes: false },
   // Categories
@@ -66,6 +71,9 @@ export const forkTools: ToolEntry[] = [
   { title: "Get Money Movements", module: GetMoneyMovementsTool, writes: false },
   { title: "Get Money Movement Groups", module: GetMoneyMovementGroupsTool, writes: false },
 ];
+
+/** Upstream tools the fork serves its own version of, each for the reason given in its file. */
+export const REPLACES_UPSTREAM: ReadonlySet<string> = new Set([ListPlansTool.name]);
 
 /**
  * Tools that change YNAB are hidden unless YNAB_ALLOW_WRITES is exactly "true",

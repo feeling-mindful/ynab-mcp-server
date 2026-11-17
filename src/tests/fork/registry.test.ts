@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { forkTools, registerForkServer, writesEnabled } from '../../fork/registry';
+import { forkTools, registerForkServer, REPLACES_UPSTREAM, writesEnabled } from '../../fork/registry';
 import { tools as upstreamTools } from '../../registry';
 import { ynabTokenContext } from '../../fork/tools/apiUtils';
 import * as GetUserTool from '../../fork/tools/GetUserTool';
@@ -49,9 +49,25 @@ describe('fork registry', () => {
   });
 
   describe('which tools are exposed', () => {
-    it('gives every fork tool a name no upstream tool uses', () => {
-      const names = [...upstreamTools, ...forkTools].map((tool) => tool.module.name);
-      expect(new Set(names).size).toBe(names.length);
+    it('lets a fork tool share an upstream name only where it is meant to replace it', () => {
+      const upstream = new Set(upstreamTools.map((tool) => tool.module.name));
+      const shared = forkTools.map((tool) => tool.module.name).filter((name) => upstream.has(name));
+      expect(shared.sort()).toEqual([...REPLACES_UPSTREAM].sort());
+      expect(new Set(forkTools.map((tool) => tool.module.name)).size).toBe(forkTools.length);
+    });
+
+    it('lists plans with the signed-in token even though YNAB_API_TOKEN is not set', async () => {
+      vi.stubEnv('YNAB_API_TOKEN', undefined);
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+        json({ data: { plans: [{ id: 'p-1', name: 'Home' }], default_plan: null } }));
+      const server = fakeServer();
+      registerForkServer(server, tokenOf, {});
+
+      const result = await server.registered.get('ynab_list_plans')!.cb({}, { token: 'token-a' });
+
+      expect(result.isError).toBeUndefined();
+      expect(JSON.parse(result.content[0].text)).toEqual([{ id: 'p-1', name: 'Home' }]);
+      expect(new Headers((fetchMock.mock.calls[0][1] as RequestInit).headers).get('Authorization')).toBe('Bearer token-a');
     });
 
     it('marks every fork tool that changes YNAB as a write', () => {
