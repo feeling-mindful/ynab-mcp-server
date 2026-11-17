@@ -1,54 +1,90 @@
 {
-  "name": "@feelingmindful/ynab-mcp-server",
-  "version": "0.1.2",
-  "description": "ynab-mcp-server MCP server",
-  "author": "Nick Prokesch <nick@prokes.ch>",
+  "name": "ynab-mcp-server",
+  "version": "0.9.0",
+  "description": "MCP server for interacting with a YNAB plan",
+  "author": "Caleb LeNoir <caleb.lenoir@hey.com>",
+  "contributors": [
+    {
+      "name": "lwsinclair",
+      "url": "https://github.com/lwsinclair"
+    },
+    {
+      "name": "grandcamel",
+      "url": "https://github.com/grandcamel"
+    },
+    {
+      "name": "ianthebeard",
+      "url": "https://github.com/ianthebeard"
+    }
+  ],
+  "repository": "git+https://github.com/calebl/ynab-mcp-server.git",
+  "homepage": "https://github.com/calebl/ynab-mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/calebl/ynab-mcp-server/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ynab",
+    "budgeting",
+    "personal-finance"
+  ],
+  "engines": {
+    "node": "^22 || >=24"
+  },
   "type": "module",
   "bin": {
-    "ynab-mcp-server": "./dist/index.js"
+    "ynab-mcp-server": "./dist/index.js",
+    "ynab-mcp-server-http": "./dist/http.js"
   },
   "files": [
     "dist"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/calebl/ynab-mcp-server.git"
-  },
   "scripts": {
-    "build": "next build",
-    "build:cli": "tsc -p tsconfig.cli.json && node -e \"const fs=require('node:fs');if(fs.existsSync('dist/index.js'))fs.chmodSync('dist/index.js',0o755)\"",
-    "prepare": "npm run build:cli",
-    "watch": "tsc -p tsconfig.cli.json --watch",
+    "build": "tsc && chmod +x dist/index.js dist/http.js",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
     "start": "node dist/index.js",
-    "debug": "npm run build:cli && npx @modelcontextprotocol/inspector dist/index.js",
+    "start:http": "node dist/http.js",
+    "debug": "npm run build && npx @modelcontextprotocol/inspector dist/index.js",
     "test": "vitest",
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json",
+    "dev:worker": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-access": "node scripts/cloudflare-access.mjs",
+    "test:run": "vitest run",
     "dev": "next dev",
-    "next:start": "next start"
+    "build:next": "next build",
+    "start:next": "next start",
+    "typecheck:next": "tsc -p tsconfig.next.json"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "@types/axios": "^0.14.4",
-    "axios": "^1.8.4",
-    "commander": "^14.0.1",
+    "@cloudflare/workers-oauth-provider": "^0.10.3",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/server": "^2.3.0",
+    "jose": "^6.2.14",
+    "ynab": "^4.5.0",
+    "zod": "^4.5.4",
     "mcp-handler": "^1.0.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "ynab": "^2.9.0",
-    "zod": "^3.23.8"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@modelcontextprotocol/inspector": "^0.16.5",
-    "@types/node": "^20.11.24",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@cloudflare/workers-types": "^5.20260906.1",
+    "@modelcontextprotocol/inspector": "0.16.8",
+    "@types/node": "^22.20.3",
+    "@vitest/coverage-v8": "^4.1.11",
     "typescript": "^5.3.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11",
+    "wrangler": "^4.129.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  },
+  "overrides": {
+    "undici": "^7.30.1"
   }
 }

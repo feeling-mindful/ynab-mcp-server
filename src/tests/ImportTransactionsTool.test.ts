@@ -76,6 +76,17 @@ describe('ImportTransactionsTool', () => {
       expect(mockApi.transactions.importTransactions).toHaveBeenCalledWith('test-budget-id');
     });
 
+    it('should return error when no plan ID is available', async () => {
+      delete process.env.YNAB_PLAN_ID;
+      delete process.env.YNAB_BUDGET_ID;
+
+      const result = await ImportTransactionsTool.execute({}, mockApi as any);
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('No plan ID provided');
+    });
+
     it('should handle API error', async () => {
       mockApi.transactions.importTransactions.mockRejectedValue(
         new Error('No linked accounts')

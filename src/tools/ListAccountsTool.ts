@@ -1,27 +1,34 @@
+import { resolvePlanId } from "./planId.js";
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { getDecimalDigits, toDollars } from "./money.js";
 
 export const name = "ynab_list_accounts";
-export const description = "Lists all accounts in a budget. Useful for finding account IDs when creating transactions.";
+export const description = "Lists all accounts in a plan. Useful for finding account IDs when creating transactions.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  planId: z.string().optional().describe("The plan ID (optional, defaults to YNAB_PLAN_ID; budgetId is a deprecated alias)"),
+  budgetId: z.string().optional().describe("Deprecated alias of planId (still accepted)"),
   includeClosedAccounts: z.boolean().optional().describe("Include closed accounts in the list (default: false)"),
 };
 
 interface ListAccountsInput {
+  planId?: string;
   budgetId?: string;
   includeClosedAccounts?: boolean;
 }
 
+
 export async function execute(input: ListAccountsInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlanId(input);
     const includeClosedAccounts = input.includeClosedAccounts ?? false;
 
     console.error(`Listing accounts for budget ${budgetId}`);
-    const response = await api.accounts.getAccounts(budgetId);
+    const [response, decimalDigits] = await Promise.all([
+      api.accounts.getAccounts(budgetId),
+      getDecimalDigits(api, budgetId),
+    ]);
 
     // Filter and format accounts
     const accounts = response.data.accounts
@@ -32,9 +39,9 @@ export async function execute(input: ListAccountsInput, api: ynab.API) {
         type: account.type,
         on_budget: account.on_budget,
         closed: account.closed,
-        balance: (account.balance / 1000).toFixed(2),
-        cleared_balance: (account.cleared_balance / 1000).toFixed(2),
-        uncleared_balance: (account.uncleared_balance / 1000).toFixed(2),
+        balance: toDollars(account.balance, decimalDigits),
+        cleared_balance: toDollars(account.cleared_balance, decimalDigits),
+        uncleared_balance: toDollars(account.uncleared_balance, decimalDigits),
         transfer_payee_id: account.transfer_payee_id,
       }));
 

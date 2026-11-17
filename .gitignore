@@ -5,15 +5,22 @@ node_modules
 logs
 data
 coverage
-.claude
+.claude/*
+!.claude/skills/
+dist
+
+.dev.vars
+wrangler.jsonc
+.wrangler/
+# Backups written by scripts/cloudflare-access.mjs
+.cloudflare-access/
+
+# Fork: Next.js on Vercel
 .next
 .vercel
 next-env.d.ts
-dist
 .env
-.env.local
 .env.*
 !.env.example
 .premium
-tsconfig.tsbuildinfo
-.env*.local
+*.tsbuildinfo

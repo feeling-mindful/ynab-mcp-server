@@ -133,9 +133,9 @@ describe('ListAccountsTool', () => {
 
       const response = JSON.parse(result.content[0].text);
       const checking = response.accounts.find((a: any) => a.name === 'Checking');
-      expect(checking.balance).toBe('5000.00');
-      expect(checking.cleared_balance).toBe('4500.00');
-      expect(checking.uncleared_balance).toBe('500.00');
+      expect(checking.balance).toBe(5000);
+      expect(checking.cleared_balance).toBe(4500);
+      expect(checking.uncleared_balance).toBe(500);
     });
 
     it('should include account metadata', async () => {
@@ -159,6 +159,17 @@ describe('ListAccountsTool', () => {
       await ListAccountsTool.execute({}, mockApi as any);
 
       expect(mockApi.accounts.getAccounts).toHaveBeenCalledWith('test-budget-id');
+    });
+
+    it('should return error when no plan ID is available', async () => {
+      delete process.env.YNAB_PLAN_ID;
+      delete process.env.YNAB_BUDGET_ID;
+
+      const result = await ListAccountsTool.execute({}, mockApi as any);
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('No plan ID provided');
     });
 
     it('should handle API error', async () => {

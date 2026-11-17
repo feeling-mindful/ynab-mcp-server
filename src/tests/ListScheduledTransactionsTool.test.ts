@@ -132,12 +132,12 @@ describe('ListScheduledTransactionsTool', () => {
       const rentPayment = response.scheduled_transactions.find(
         (t: any) => t.memo === 'Rent payment'
       );
-      expect(rentPayment.amount).toBe('-1500.00');
+      expect(rentPayment.amount).toBe(-1500);
 
       const paycheck = response.scheduled_transactions.find(
         (t: any) => t.memo === 'Paycheck'
       );
-      expect(paycheck.amount).toBe('2500.00');
+      expect(paycheck.amount).toBe(2500);
     });
 
     it('should include all transaction details', async () => {
@@ -173,6 +173,17 @@ describe('ListScheduledTransactionsTool', () => {
       expect(mockApi.scheduledTransactions.getScheduledTransactions).toHaveBeenCalledWith(
         'test-budget-id'
       );
+    });
+
+    it('should return error when no plan ID is available', async () => {
+      delete process.env.YNAB_PLAN_ID;
+      delete process.env.YNAB_BUDGET_ID;
+
+      const result = await ListScheduledTransactionsTool.execute({}, mockApi as any);
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('No plan ID provided');
     });
 
     it('should handle API error', async () => {

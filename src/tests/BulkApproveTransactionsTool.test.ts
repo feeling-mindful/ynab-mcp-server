@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, Mock } from 'vitest';
+import { z } from 'zod';
 import * as ynab from 'ynab';
 import * as BulkApproveTransactionsTool from '../tools/BulkApproveTransactionsTool';
 
@@ -103,6 +104,33 @@ describe('BulkApproveTransactionsTool', () => {
       expect(response.approved_count).toBe(1);
     });
 
+    it('should un-approve transactions when approved is false', async () => {
+      mockApi.transactions.updateTransactions.mockResolvedValue({
+        data: {
+          transactions: [{ ...mockTransactionsResponse.data.transactions[0], approved: false }],
+        },
+      });
+
+      const result = await BulkApproveTransactionsTool.execute(
+        {
+          budgetId: 'test-budget-id',
+          transactionIds: ['txn-1'],
+          approved: false,
+        },
+        mockApi as any
+      );
+
+      expect(mockApi.transactions.updateTransactions).toHaveBeenCalledWith('test-budget-id', {
+        transactions: [{ id: 'txn-1', approved: false }],
+      });
+      const response = JSON.parse(result.content[0].text);
+      expect(response.success).toBe(true);
+      expect(response.unapproved_count).toBe(1);
+      expect(response).not.toHaveProperty('approved_count');
+      expect(response.transactions[0].approved).toBe(false);
+      expect(response.message).toBe('Successfully un-approved 1 transaction(s)');
+    });
+
     it('should use YNAB_BUDGET_ID from env when budgetId not provided', async () => {
       mockApi.transactions.updateTransactions.mockResolvedValue(mockTransactionsResponse);
 
@@ -131,6 +159,22 @@ describe('BulkApproveTransactionsTool', () => {
       const response = JSON.parse(result.content[0].text);
       expect(response.success).toBe(false);
       expect(response.error).toContain('No transaction IDs provided');
+    });
+
+    it('should return error when no plan ID is available', async () => {
+      delete process.env.YNAB_PLAN_ID;
+      delete process.env.YNAB_BUDGET_ID;
+
+      const result = await BulkApproveTransactionsTool.execute(
+        {
+          transactionIds: ['txn-1'],
+        },
+        mockApi as any
+      );
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('No plan ID provided');
     });
 
     it('should handle API error', async () => {
@@ -179,21 +223,28 @@ describe('BulkApproveTransactionsTool', () => {
       );
 
       const response = JSON.parse(result.content[0].text);
-      expect(response.transactions[0].amount).toBe('-25.99');
-      expect(response.transactions[1].amount).toBe('-15.00');
-      expect(response.transactions[2].amount).toBe('-8.50');
+      expect(response.transactions[0].amount).toBe(-25.99);
+      expect(response.transactions[1].amount).toBe(-15);
+      expect(response.transactions[2].amount).toBe(-8.5);
     });
   });
 
   describe('tool configuration', () => {
     it('should have correct name and description', () => {
       expect(BulkApproveTransactionsTool.name).toBe('ynab_bulk_approve_transactions');
-      expect(BulkApproveTransactionsTool.description).toContain('multiple transactions');
+      expect(BulkApproveTransactionsTool.description).toContain('un-approves');
     });
 
     it('should have required input schema fields', () => {
       expect(BulkApproveTransactionsTool.inputSchema).toHaveProperty('budgetId');
       expect(BulkApproveTransactionsTool.inputSchema).toHaveProperty('transactionIds');
+    });
+
+    it('should require at least one transaction ID and cap the maximum', () => {
+      const transactionIds = BulkApproveTransactionsTool.inputSchema.transactionIds as z.ZodType;
+      expect(transactionIds.safeParse([]).success).toBe(false);
+      expect(transactionIds.safeParse(['txn-1']).success).toBe(true);
+      expect(transactionIds.safeParse(Array(501).fill('txn')).success).toBe(false);
     });
   });
 });

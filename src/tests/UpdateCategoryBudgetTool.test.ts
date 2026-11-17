@@ -30,7 +30,7 @@ describe('UpdateCategoryBudgetTool', () => {
     const mockCategoryResponse = {
       data: {
         category: {
-          id: 'cccccccc-0000-4000-8000-000000000001',
+          id: 'category-1',
           name: 'Groceries',
           budgeted: 500000, // $500.00 in milliunits
           activity: -150000, // -$150.00
@@ -46,7 +46,7 @@ describe('UpdateCategoryBudgetTool', () => {
         {
           budgetId: 'test-budget-id',
           month: '2024-01-01',
-          categoryId: 'cccccccc-0000-4000-8000-000000000001',
+          categoryId: 'category-1',
           budgeted: 500.00,
         },
         mockApi as any
@@ -55,14 +55,14 @@ describe('UpdateCategoryBudgetTool', () => {
       expect(mockApi.categories.updateMonthCategory).toHaveBeenCalledWith(
         'test-budget-id',
         '2024-01-01',
-        'cccccccc-0000-4000-8000-000000000001',
+        'category-1',
         { category: { budgeted: 500000 } }
       );
 
       const response = JSON.parse(result.content[0].text);
       expect(response.success).toBe(true);
       expect(response.category.name).toBe('Groceries');
-      expect(response.category.budgeted).toBe('500.00');
+      expect(response.category.budgeted).toBe(500);
     });
 
     it('should use YNAB_BUDGET_ID from env when budgetId not provided', async () => {
@@ -71,7 +71,7 @@ describe('UpdateCategoryBudgetTool', () => {
       await UpdateCategoryBudgetTool.execute(
         {
           month: '2024-01-01',
-          categoryId: 'cccccccc-0000-4000-8000-000000000001',
+          categoryId: 'category-1',
           budgeted: 500.00,
         },
         mockApi as any
@@ -80,7 +80,7 @@ describe('UpdateCategoryBudgetTool', () => {
       expect(mockApi.categories.updateMonthCategory).toHaveBeenCalledWith(
         'test-budget-id',
         '2024-01-01',
-        'cccccccc-0000-4000-8000-000000000001',
+        'category-1',
         expect.any(Object)
       );
     });
@@ -89,7 +89,7 @@ describe('UpdateCategoryBudgetTool', () => {
       mockApi.categories.updateMonthCategory.mockResolvedValue({
         data: {
           category: {
-            id: 'cccccccc-0000-4000-8000-000000000001',
+            id: 'category-1',
             name: 'Groceries',
             budgeted: 123450,
             activity: 0,
@@ -102,7 +102,7 @@ describe('UpdateCategoryBudgetTool', () => {
         {
           budgetId: 'test-budget-id',
           month: '2024-01-01',
-          categoryId: 'cccccccc-0000-4000-8000-000000000001',
+          categoryId: 'category-1',
           budgeted: 123.45,
         },
         mockApi as any
@@ -111,9 +111,27 @@ describe('UpdateCategoryBudgetTool', () => {
       expect(mockApi.categories.updateMonthCategory).toHaveBeenCalledWith(
         'test-budget-id',
         '2024-01-01',
-        'cccccccc-0000-4000-8000-000000000001',
+        'category-1',
         { category: { budgeted: 123450 } }
       );
+    });
+
+    it('should return error when no plan ID is available', async () => {
+      delete process.env.YNAB_PLAN_ID;
+      delete process.env.YNAB_BUDGET_ID;
+
+      const result = await UpdateCategoryBudgetTool.execute(
+        {
+          month: '2024-01-01',
+          categoryId: 'category-1',
+          budgeted: 500.00,
+        },
+        mockApi as any
+      );
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.success).toBe(false);
+      expect(response.error).toContain('No plan ID provided');
     });
 
     it('should handle API error', async () => {
@@ -123,7 +141,7 @@ describe('UpdateCategoryBudgetTool', () => {
         {
           budgetId: 'test-budget-id',
           month: '2024-01-01',
-          categoryId: 'cccccccc-0000-4000-8000-000000000001',
+          categoryId: 'category-1',
           budgeted: 500.00,
         },
         mockApi as any
@@ -143,7 +161,7 @@ describe('UpdateCategoryBudgetTool', () => {
         {
           budgetId: 'test-budget-id',
           month: '2024-01-01',
-          categoryId: 'cccccccc-0000-4000-8000-000000000001',
+          categoryId: 'category-1',
           budgeted: 500.00,
         },
         mockApi as any

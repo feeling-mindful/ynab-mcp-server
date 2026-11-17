@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // tsconfig.json stays upstream's (CLI build); the app has its own.
+  typescript: { tsconfigPath: "tsconfig.next.json" },
   experimental: {
     serverComponentsExternalPackages: ["ynab"],
   },

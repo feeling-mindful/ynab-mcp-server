@@ -1,24 +1,31 @@
+import { resolvePlanId } from "./planId.js";
 import { z } from "zod";
 import * as ynab from "ynab";
 import { getErrorMessage } from "./errorUtils.js";
-import { getBudgetId } from "./budgetUtils.js";
+import { getDecimalDigits, toDollars } from "./money.js";
 
 export const name = "ynab_list_scheduled_transactions";
-export const description = "Lists all scheduled (recurring) transactions in a budget.";
+export const description = "Lists the scheduled transactions set up in YNAB. To find recurring charges in transaction history, including ones that are not scheduled, use ynab_detect_recurring. For a projected balance, use ynab_balance_forecast.";
 export const inputSchema = {
-  budgetId: z.string().optional().describe("The ID of the budget (optional, defaults to YNAB_BUDGET_ID environment variable)"),
+  planId: z.string().optional().describe("The plan ID (optional, defaults to YNAB_PLAN_ID; budgetId is a deprecated alias)"),
+  budgetId: z.string().optional().describe("Deprecated alias of planId (still accepted)"),
 };
 
 interface ListScheduledTransactionsInput {
+  planId?: string;
   budgetId?: string;
 }
 
+
 export async function execute(input: ListScheduledTransactionsInput, api: ynab.API) {
   try {
-    const budgetId = getBudgetId(input.budgetId);
+    const budgetId = resolvePlanId(input);
 
     console.error(`Listing scheduled transactions for budget ${budgetId}`);
-    const response = await api.scheduledTransactions.getScheduledTransactions(budgetId);
+    const [response, decimalDigits] = await Promise.all([
+      api.scheduledTransactions.getScheduledTransactions(budgetId),
+      getDecimalDigits(api, budgetId),
+    ]);
 
     // Filter and format scheduled transactions
     const scheduledTransactions = response.data.scheduled_transactions
@@ -28,7 +35,7 @@ export async function execute(input: ListScheduledTransactionsInput, api: ynab.A
         date_first: txn.date_first,
         date_next: txn.date_next,
         frequency: txn.frequency,
-        amount: (txn.amount / 1000).toFixed(2),
+        amount: toDollars(txn.amount, decimalDigits),
         memo: txn.memo,
         flag_color: txn.flag_color,
         account_id: txn.account_id,
